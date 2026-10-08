@@ -6,4 +6,4 @@ services:
     startCommand: npm start
     envVars:
       - key: CORS_ORIGIN
-        value: https://YOUR-APP.vercel.app
+        value: https://cuiconnect-8sjiiqwmo-saad7420s-projects.vercel.app/
