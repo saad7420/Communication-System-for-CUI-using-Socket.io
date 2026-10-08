@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: cui-connect-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: CORS_ORIGIN
+        value: https://YOUR-APP.vercel.app
