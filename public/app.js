@@ -1,5 +1,3 @@
-// Backend URL (empty = same origin). Set in public/config.js for Vercel.
-const API = (window.CUI_API || '').replace(/\/$/, '');
 // app.js - browser side of Project A.
 // The browser only DISPLAYS things. Every rule is checked again on the
 // server, so hiding a button here is a convenience, not security.
@@ -20,7 +18,7 @@ let typingTimer = null;
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('#loginError').textContent = '';
-  const res = await fetch(API + '/api/login', {
+  const res = await fetch('/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: $('#username').value, password: $('#password').value }),
@@ -38,7 +36,7 @@ $('#logoutBtn').addEventListener('click', () => {
 
 // ---------------------------------------------------------------- socket
 function start(token) {
-  socket = io(API || undefined, { auth: { token } });
+  socket = io({ auth: { token } });
 
   socket.on('connect_error', (err) => {
     sessionStorage.removeItem('token');
@@ -294,7 +292,7 @@ $('#manageBtn').addEventListener('click', () => {
 $('#closeManage').addEventListener('click', () => dlg.close());
 
 async function api(method, url, body) {
-  const res = await fetch(API + url, {
+  const res = await fetch(url, {
     method,
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionStorage.getItem('token') },
     body: JSON.stringify(body),
@@ -317,7 +315,7 @@ $('#groupForm').addEventListener('submit', async (e) => {
 $('#enrolForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const d = formData(e.target);
-  const users = await (await fetch(API + '/api/admin/users', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem('token') } })).json();
+  const users = await (await fetch('/api/admin/users', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem('token') } })).json();
   const u = users.find((x) => x.username === d.username.toLowerCase());
   if (!u) { $('#manageMsg').textContent = 'No such user'; return; }
   await api('PATCH', `/api/admin/users/${u.id}/courses`, { courses: d.courses.split(',').map((c) => c.trim()).filter(Boolean) });

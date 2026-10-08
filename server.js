@@ -15,20 +15,8 @@ const policy = require('./src/policy');
 
 const app = express();
 const server = http.createServer(app);
-const ORIGINS = (process.env.CORS_ORIGIN || '').split(',').map((o) => o.trim()).filter(Boolean);
-const io = new Server(server, ORIGINS.length ? { cors: { origin: ORIGINS } } : {});
+const io = new Server(server);
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.setHeader('Vary', 'Origin');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-  }
-  next();
-});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
