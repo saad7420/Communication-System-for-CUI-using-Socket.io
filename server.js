@@ -347,6 +347,8 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
-  server.listen(PORT, () => console.log(`CUI Connect (Project A) running on http://localhost:${PORT}`));
+  server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
 }
 module.exports = { server, io };
