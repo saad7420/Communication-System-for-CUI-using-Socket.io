@@ -1,0 +1,311 @@
+{
+  "counter": 120,
+  "users": [
+    {
+      "id": "u101",
+      "name": "Admin Office",
+      "username": "admin",
+      "passwordHash": "b5a5fc59de05d0dd:66d8754a114d860b64a27256de10bf894d87dba51cf11e544338bbbe9bd86652",
+      "role": "admin",
+      "department": "Administration",
+      "semester": null,
+      "courses": []
+    },
+    {
+      "id": "u102",
+      "name": "Dr. Saima Tariq",
+      "username": "hod.cs",
+      "passwordHash": "14e928c0b2017b0d:6a2c131c03d6b9af5b026d447fe7953d81238e07ade488c5cd6304a9fcb6a8a7",
+      "role": "hod",
+      "department": "CS",
+      "semester": null,
+      "courses": []
+    },
+    {
+      "id": "u103",
+      "name": "Dr. Ali Khan",
+      "username": "ali.khan",
+      "passwordHash": "6c8c9d1ef218eff8:90c30c4f406c94a19d70a24b0c825ad02134f2e11f86df8fc05d4f9185be37bc",
+      "role": "faculty",
+      "department": "CS",
+      "semester": null,
+      "courses": [
+        "CSC102",
+        "CSC241"
+      ]
+    },
+    {
+      "id": "u104",
+      "name": "Ms. Sara Noor",
+      "username": "sara.noor",
+      "passwordHash": "7a17b4732003a9cc:196e7772a325a09a8d060cf950bad684790443550cdb678b0c1cc6f0b3372acd",
+      "role": "faculty",
+      "department": "EE",
+      "semester": null,
+      "courses": [
+        "EEE101"
+      ]
+    },
+    {
+      "id": "u105",
+      "name": "Ahmed Raza",
+      "username": "fa23-bcs-001",
+      "passwordHash": "eb19d865fedf9371:7468b7fb58462fc952c12ca70f436594bb7a11646737fe6bef55335c3be05cad",
+      "role": "student",
+      "department": "CS",
+      "semester": 3,
+      "courses": [
+        "CSC102",
+        "CSC241"
+      ]
+    },
+    {
+      "id": "u106",
+      "name": "Hina Fatima",
+      "username": "fa23-bcs-002",
+      "passwordHash": "c0616f089aaf8e1c:fbf43dc59e0e7cfb4b69acf030479f09443ee7f0558fd41b9c0a572ee09f69de",
+      "role": "student",
+      "department": "CS",
+      "semester": 3,
+      "courses": [
+        "CSC102"
+      ]
+    },
+    {
+      "id": "u107",
+      "name": "Bilal Hussain",
+      "username": "fa23-bee-010",
+      "passwordHash": "acade5dbb6985310:d3bab0c2576d9795db3819b59f1d50d29662fab58ab14fe739c3e1690938742e",
+      "role": "student",
+      "department": "EE",
+      "semester": 3,
+      "courses": [
+        "EEE101"
+      ]
+    },
+    {
+      "id": "u108",
+      "name": "Exam Cell",
+      "username": "examcell",
+      "passwordHash": "90e08bb067b2a704:58f13bd3739675e2294492e0c8cb78cb4df4dc42cf36e4b801f671fa3c18a69e",
+      "role": "staff",
+      "department": "Administration",
+      "semester": null,
+      "courses": []
+    }
+  ],
+  "groups": [
+    {
+      "id": "g109",
+      "name": "COMSATS Announcements",
+      "type": "announcement",
+      "description": "University-wide notices. Only the admin office can post.",
+      "audience": {
+        "everyone": true
+      },
+      "posters": {
+        "roles": [
+          "admin"
+        ]
+      },
+      "moderators": {
+        "roles": [
+          "admin"
+        ]
+      },
+      "locked": false,
+      "createdBy": "u101"
+    },
+    {
+      "id": "g110",
+      "name": "CS Department Notices",
+      "type": "department",
+      "description": "Notices for the Computer Science department. HOD posts, everybody in CS reads.",
+      "audience": {
+        "departments": [
+          "CS"
+        ]
+      },
+      "posters": {
+        "roles": [
+          "hod",
+          "admin"
+        ]
+      },
+      "moderators": {
+        "roles": [
+          "hod"
+        ],
+        "departments": [
+          "CS"
+        ]
+      },
+      "locked": false,
+      "createdBy": "u102"
+    },
+    {
+      "id": "g111",
+      "name": "CSC102 - Programming Fundamentals",
+      "type": "class",
+      "description": "Class group. Students and the course teacher discuss lectures and assignments.",
+      "audience": {
+        "course": "CSC102"
+      },
+      "posters": {
+        "everyone": true
+      },
+      "moderators": {
+        "roles": [
+          "faculty"
+        ],
+        "course": "CSC102"
+      },
+      "locked": false,
+      "createdBy": "u103"
+    },
+    {
+      "id": "g112",
+      "name": "CSC241 - Data Structures",
+      "type": "class",
+      "description": "Class group for Data Structures.",
+      "audience": {
+        "course": "CSC241"
+      },
+      "posters": {
+        "everyone": true
+      },
+      "moderators": {
+        "roles": [
+          "faculty"
+        ],
+        "course": "CSC241"
+      },
+      "locked": false,
+      "createdBy": "u103"
+    },
+    {
+      "id": "g113",
+      "name": "EEE101 - Circuit Analysis",
+      "type": "class",
+      "description": "Class group for Circuit Analysis.",
+      "audience": {
+        "course": "EEE101"
+      },
+      "posters": {
+        "everyone": true
+      },
+      "moderators": {
+        "roles": [
+          "faculty"
+        ],
+        "course": "EEE101"
+      },
+      "locked": false,
+      "createdBy": "u104"
+    },
+    {
+      "id": "g114",
+      "name": "Faculty Lounge",
+      "type": "faculty",
+      "description": "Only teaching staff and HODs.",
+      "audience": {
+        "roles": [
+          "faculty",
+          "hod"
+        ]
+      },
+      "posters": {
+        "everyone": true
+      },
+      "moderators": {
+        "roles": [
+          "hod"
+        ]
+      },
+      "locked": false,
+      "createdBy": "u101"
+    },
+    {
+      "id": "g115",
+      "name": "Exam Cell Helpdesk",
+      "type": "helpdesk",
+      "description": "Ask exam-related questions. Everyone can read and write.",
+      "audience": {
+        "everyone": true
+      },
+      "posters": {
+        "everyone": true
+      },
+      "moderators": {
+        "users": [
+          "u108"
+        ]
+      },
+      "locked": false,
+      "createdBy": "u108"
+    }
+  ],
+  "messages": {
+    "dm:u102_u105": [
+      {
+        "id": "m116",
+        "room": "dm:u102_u105",
+        "from": {
+          "id": "u105",
+          "name": "Ahmed Raza",
+          "role": "student"
+        },
+        "text": "hi",
+        "at": 1791474873688
+      }
+    ],
+    "g:g112": [
+      {
+        "id": "m117",
+        "room": "g:g112",
+        "from": {
+          "id": "u105",
+          "name": "Ahmed Raza",
+          "role": "student"
+        },
+        "text": "hello",
+        "at": 1791474888650
+      },
+      {
+        "id": "m118",
+        "room": "g:g112",
+        "from": {
+          "id": "u105",
+          "name": "Ahmed Raza",
+          "role": "student"
+        },
+        "text": "hi",
+        "at": 1791474891598
+      },
+      {
+        "id": "m119",
+        "room": "g:g112",
+        "from": {
+          "id": "u105",
+          "name": "Ahmed Raza",
+          "role": "student"
+        },
+        "text": "are you there",
+        "at": 1791474895513
+      }
+    ],
+    "dm:u105_u106": [
+      {
+        "id": "m120",
+        "room": "dm:u105_u106",
+        "from": {
+          "id": "u105",
+          "name": "Ahmed Raza",
+          "role": "student"
+        },
+        "text": "hello",
+        "at": 1791474975676
+      }
+    ]
+  }
+}
