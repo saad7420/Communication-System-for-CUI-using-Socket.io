@@ -83,12 +83,12 @@ function addMessage(room, message) {
 function seed() {
   const pw = 'cui123';
   const admin = addUser({ name: 'Admin Office', username: 'admin', password: pw, role: 'admin', department: 'Administration' });
-  const hod = addUser({ name: 'Dr. Saima Tariq', username: 'hod.cs', password: pw, role: 'hod', department: 'CS' });
+  const hod = addUser({ name: 'Muhammad Rashid Mukhtar', username: 'hod.cs', password: pw, role: 'hod', department: 'CS' });
   const ali = addUser({ name: 'Dr. Ali Khan', username: 'ali.khan', password: pw, role: 'faculty', department: 'CS', courses: ['CSC102', 'CSC241'] });
   const sara = addUser({ name: 'Ms. Sara Noor', username: 'sara.noor', password: pw, role: 'faculty', department: 'EE', courses: ['EEE101'] });
-  addUser({ name: 'Ahmed Raza', username: 'fa23-bcs-001', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102', 'CSC241'] });
-  addUser({ name: 'Hina Fatima', username: 'fa23-bcs-002', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102'] });
-  addUser({ name: 'Bilal Hussain', username: 'fa23-bee-010', password: pw, role: 'student', department: 'EE', semester: 3, courses: ['EEE101'] });
+  addUser({ name: 'Abdullah Khan', username: 'SP23-BAI-027', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102', 'CSC241'] });
+  addUser({ name: 'Saad Mehmood', username: 'SP23-BAI-036', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102'] });
+  addUser({ name: 'Abubakar', username: 'SP23-BAI-028', password: pw, role: 'student', department: 'EE', semester: 3, courses: ['EEE101'] });
   const exam = addUser({ name: 'Exam Cell', username: 'examcell', password: pw, role: 'staff', department: 'Administration' });
 
   addGroup({
