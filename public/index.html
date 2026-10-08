@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CUI Connect</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ============ LOGIN ============ -->
+  <section id="loginView" class="login">
+    <form id="loginForm" class="login-card">
+      <h1>CUI Connect</h1>
+      <p class="muted">COMSATS University Islamabad &middot; Campus Communication</p>
+      <label>Username / Reg. No<input id="username" autocomplete="username" required /></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required /></label>
+      <button type="submit">Sign in</button>
+      <p id="loginError" class="error"></p>
+      <details class="demo">
+        <summary>Demo accounts (password: cui123)</summary>
+        <code>admin &middot; hod.cs &middot; ali.khan &middot; sara.noor<br />fa23-bcs-001 &middot; fa23-bcs-002 &middot; fa23-bee-010 &middot; examcell</code>
+      </details>
+    </form>
+  </section>
+
+  <!-- ============ CHAT ============ -->
+  <section id="chatView" class="app hidden">
+    <aside class="sidebar">
+      <header class="me">
+        <div>
+          <strong id="meName"></strong>
+          <div id="meInfo" class="muted small"></div>
+        </div>
+        <div class="me-actions">
+          <button id="manageBtn" class="ghost hidden" title="Manage">Manage</button>
+          <button id="logoutBtn" class="ghost">Logout</button>
+        </div>
+      </header>
+      <div class="list" id="sidebarList"></div>
+    </aside>
+
+    <main class="chat">
+      <header class="chat-head">
+        <div>
+          <strong id="roomTitle">Select a chat</strong>
+          <div id="roomSub" class="muted small"></div>
+        </div>
+        <button id="lockBtn" class="ghost hidden"></button>
+      </header>
+      <div id="messages" class="messages"></div>
+      <div id="typing" class="typing small muted"></div>
+      <form id="composer" class="composer">
+        <input id="text" placeholder="Select a chat to start" autocomplete="off" disabled />
+        <button type="submit" disabled>Send</button>
+      </form>
+      <div id="toast" class="toast hidden"></div>
+    </main>
+  </section>
+
+  <!-- ============ MANAGE DIALOG ============ -->
+  <dialog id="manageDlg">
+    <h2>Manage</h2>
+    <div class="forms">
+      <form id="userForm" class="box admin-only">
+        <h3>Add user</h3>
+        <input name="name" placeholder="Full name" required />
+        <input name="username" placeholder="Username / Reg. No" required />
+        <input name="password" placeholder="Password" required />
+        <select name="role"><option>student</option><option>faculty</option><option>hod</option><option>staff</option></select>
+        <input name="department" placeholder="Department (CS, EE, BBA...)" required />
+        <input name="semester" placeholder="Semester (students)" />
+        <input name="courses" placeholder="Courses e.g. CSC102,CSC241" />
+        <button>Add user</button>
+      </form>
+
+      <form id="groupForm" class="box">
+        <h3>Create group</h3>
+        <input name="name" placeholder="Group name" required />
+        <input name="description" placeholder="Description" />
+        <select name="audienceType" id="audType">
+          <option value="course">Course (class group)</option>
+          <option value="department">Department</option>
+          <option value="everyone">Everyone</option>
+          <option value="roles">Roles</option>
+          <option value="users">Specific usernames</option>
+        </select>
+        <input name="audienceValue" placeholder="CSC102 / CS / roles: student,faculty / usernames" />
+        <select name="postersType">
+          <option value="all">Everyone in group can post</option>
+          <option value="faculty">Only faculty / HOD / admin can post</option>
+          <option value="leaders">Only HOD / admin can post</option>
+        </select>
+        <button>Create group</button>
+      </form>
+
+      <form id="enrolForm" class="box admin-only">
+        <h3>Set courses of a user</h3>
+        <input name="username" placeholder="Username" required />
+        <input name="courses" placeholder="CSC102,CSC241" />
+        <button>Save courses</button>
+      </form>
+
+      <form id="inviteForm" class="box">
+        <h3>Invite / remove member</h3>
+        <select name="groupId" id="inviteGroup"></select>
+        <input name="usernames" placeholder="usernames, comma separated" required />
+        <select name="action"><option value="add">Add</option><option value="remove">Remove</option></select>
+        <button>Apply</button>
+      </form>
+    </div>
+    <p id="manageMsg" class="small"></p>
+    <button id="closeManage" class="ghost">Close</button>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
