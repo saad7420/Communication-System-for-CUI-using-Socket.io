@@ -1,0 +1,17 @@
+{
+  "name": "cui-connect-rbac",
+  "version": "1.0.0",
+  "description": "COMSATS University Islamabad communication system - Project A (role/rule based boundaries)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/smoke.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.5"
+  }
+}
