@@ -14,6 +14,12 @@ const cache = {};            // room -> [messages]
 const unread = {};           // room -> count
 let typingTimer = null;
 
+// nice names for roles (internally the teacher role is called "faculty")
+const ROLE_LABEL = { superadmin: 'Super Admin', admin: 'Admin', hod: 'HOD', faculty: 'Teacher', staff: 'Staff', student: 'Student', system: 'System' };
+const roleLabel = (role) => ROLE_LABEL[role] || role;
+const isAdminRole = (role) => role === 'admin' || role === 'superadmin';
+const tok = () => 'Bearer ' + sessionStorage.getItem('token');
+
 // ---------------------------------------------------------------- login
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -52,10 +58,16 @@ function start(token) {
     $('#loginView').classList.add('hidden');
     $('#chatView').classList.remove('hidden');
     $('#meName').textContent = me.name;
-    $('#meInfo').textContent = `${me.role.toUpperCase()} · ${me.department}` + (me.courses.length ? ' · ' + me.courses.join(', ') : '');
-    const canManage = ['admin', 'hod', 'faculty'].includes(me.role);
+    $('#meInfo').textContent = `${roleLabel(me.role)}${me.repOf.length ? ' · CR of ' + me.repOf.join(', ') : ''} · ${me.department}` + (me.courses.length ? ' · ' + me.courses.join(', ') : '');
+    const canManage = ['superadmin', 'admin', 'hod', 'faculty'].includes(me.role);
     $('#manageBtn').classList.toggle('hidden', !canManage);
-    document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', me.role !== 'admin'));
+    document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdminRole(me.role)));
+    document.querySelectorAll('.rep-only').forEach((el) => el.classList.toggle('hidden', !(isAdminRole(me.role) || me.role === 'faculty')));
+    // only the super admin may create admins; other roles must not even see that option
+    document.querySelectorAll('.super-only').forEach((el) => {
+      if (el.tagName === 'OPTION') { if (me.role !== 'superadmin') el.remove(); }
+      else el.classList.toggle('hidden', me.role !== 'superadmin');
+    });
     // if the currently open group disappeared (rule changed) close it
     if (current && current.kind === 'group' && !groups.find((g) => g.id === current.id)) current = null;
     renderSidebar();
@@ -76,6 +88,19 @@ function start(token) {
       unread[msg.room] = (unread[msg.room] || 0) + 1;
       renderSidebar();
     }
+  });
+
+  // a message was pinned / unpinned
+  socket.on('message:updated', (msg) => {
+    const list = cache[msg.room];
+    if (list) { const i = list.findIndex((m) => m.id === msg.id); if (i >= 0) list[i] = msg; }
+    if (current && current.room === msg.room) { renderMessages(); renderPinned(); }
+  });
+
+  // a moderator deleted a message
+  socket.on('message:deleted', ({ room, id }) => {
+    if (cache[room]) cache[room] = cache[room].filter((m) => m.id !== id);
+    if (current && current.room === room) { renderMessages(); renderPinned(); }
   });
 
   socket.on('typing', ({ room, name }) => {
@@ -116,7 +141,7 @@ function renderSidebar() {
     t.appendChild(tag);
     const sub = document.createElement('div');
     sub.className = 'muted small';
-    sub.textContent = `${g.members} members` + (g.locked ? ' · locked' : '');
+    sub.textContent = `${g.members} members` + (g.locked ? ' · locked' : '') + (g.mode === 'announce' ? ' · announcements' : '');
     left.append(t, sub);
     row.appendChild(left);
     if (unread[room]) {
@@ -142,7 +167,7 @@ function renderSidebar() {
     t.append(dot, document.createTextNode(c.name));
     const sub = document.createElement('div');
     sub.className = 'muted small';
-    sub.textContent = `${c.role} · ${c.department}`;
+    sub.textContent = `${roleLabel(c.role)}${c.repOf && c.repOf.length ? ' (CR)' : ''} · ${c.department}`;
     left.append(t, sub);
     row.appendChild(left);
     if (unread[room]) {
@@ -168,6 +193,7 @@ function openRoom(target) {
     if (!res.ok) return toast(res.error);
     cache[target.room] = res.messages;
     renderMessages();
+    renderPinned();
   });
 }
 
@@ -177,10 +203,13 @@ function currentGroup() {
 
 function renderHeader() {
   const lock = $('#lockBtn');
+  const modeBtn = $('#modeBtn');
   if (!current) {
     $('#roomTitle').textContent = 'Select a chat';
     $('#roomSub').textContent = '';
     lock.classList.add('hidden');
+    modeBtn.classList.add('hidden');
+    $('#pinned').classList.add('hidden');
     $('#messages').innerHTML = '';
     return;
   }
@@ -190,10 +219,29 @@ function renderHeader() {
     $('#roomSub').textContent = g.description;
     lock.classList.toggle('hidden', !g.canModerate);
     lock.textContent = g.locked ? 'Unlock group' : 'Lock group';
+    modeBtn.classList.toggle('hidden', !g.canModerate);
+    modeBtn.textContent = g.mode === 'announce' ? 'Switch to open chat' : 'Announcement mode';
   } else {
     $('#roomSub').textContent = 'Private conversation';
     lock.classList.add('hidden');
+    modeBtn.classList.add('hidden');
   }
+  renderPinned();
+}
+
+// banner with the newest pinned message of the open group
+function renderPinned() {
+  const bar = $('#pinned');
+  const pins = current && current.kind === 'group' ? (cache[current.room] || []).filter((m) => m.pinned) : [];
+  bar.classList.toggle('hidden', pins.length === 0);
+  if (!pins.length) return;
+  const m = pins[pins.length - 1];
+  bar.innerHTML = '';
+  const b = document.createElement('b');
+  b.textContent = 'Pinned';
+  const s = document.createElement('span');
+  s.textContent = `${m.from.name}: ${m.text}`; // textContent => XSS safe
+  bar.append(b, s);
 }
 
 function renderComposer() {
@@ -204,7 +252,9 @@ function renderComposer() {
   const g = currentGroup();
   if (g && !g.canPost) {
     allowed = false;
-    placeholder = g.locked ? 'This group is locked by a moderator' : 'You can read this group but only authorised members can post';
+    placeholder = g.locked ? 'This group is locked by a moderator'
+      : g.mode === 'announce' ? 'Announcement mode: only teachers and class representatives can post'
+      : 'You can read this group but only authorised members can post';
   }
   input.disabled = !allowed;
   btn.disabled = !allowed;
@@ -216,16 +266,35 @@ function renderMessages() {
   box.innerHTML = '';
   (cache[current.room] || []).forEach((m) => {
     const d = document.createElement('div');
-    d.className = 'msg' + (m.from.role === 'system' ? ' system' : m.from.id === me.id ? ' me' : '');
+    d.className = 'msg' + (m.from.role === 'system' ? ' system' : m.from.id === me.id ? ' me' : '') + (m.pinned ? ' pin' : '');
     if (m.from.role !== 'system' && m.from.id !== me.id) {
       const who = document.createElement('div');
       who.className = 'who';
       who.textContent = m.from.name;
       const tag = document.createElement('span');
-      tag.className = 'tag';
-      tag.textContent = m.from.role;
+      tag.className = 'tag ' + (m.from.rep ? 'cr' : m.from.role);
+      tag.textContent = m.from.rep ? 'CR' : roleLabel(m.from.role);
       who.appendChild(tag);
       d.appendChild(who);
+    }
+    // hover buttons: pin (moderators + CR) and delete (moderators only)
+    const g = currentGroup();
+    if (g && m.from.role !== 'system' && (g.canPin || g.canModerate)) {
+      const acts = document.createElement('div');
+      acts.className = 'acts';
+      if (g.canPin) {
+        const pin = document.createElement('button');
+        pin.textContent = m.pinned ? 'Unpin' : 'Pin';
+        pin.onclick = () => socket.emit('message:pin', { groupId: g.id, messageId: m.id, pinned: !m.pinned }, (r) => { if (!r.ok) toast(r.error); });
+        acts.appendChild(pin);
+      }
+      if (g.canModerate) {
+        const del = document.createElement('button');
+        del.textContent = 'Delete';
+        del.onclick = () => socket.emit('message:delete', { groupId: g.id, messageId: m.id }, (r) => { if (!r.ok) toast(r.error); });
+        acts.appendChild(del);
+      }
+      d.appendChild(acts);
     }
     const text = document.createElement('div');
     text.textContent = m.text; // textContent => no HTML injection (XSS safe)
@@ -268,6 +337,13 @@ $('#lockBtn').addEventListener('click', () => {
   });
 });
 
+$('#modeBtn').addEventListener('click', () => {
+  const g = currentGroup();
+  socket.emit('group:mode', { groupId: g.id, mode: g.mode === 'announce' ? 'open' : 'announce' }, (res) => {
+    if (!res.ok) toast(res.error);
+  });
+});
+
 function toast(msg) {
   const t = $('#toast');
   t.textContent = msg;
@@ -288,18 +364,21 @@ $('#manageBtn').addEventListener('click', () => {
   });
   $('#manageMsg').textContent = '';
   dlg.showModal();
+  loadPanel();
 });
+$('#refreshPanel').addEventListener('click', () => loadPanel());
 $('#closeManage').addEventListener('click', () => dlg.close());
 
 async function api(method, url, body) {
   const res = await fetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionStorage.getItem('token') },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json', Authorization: tok() },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();
   $('#manageMsg').textContent = res.ok ? 'Done.' : data.error;
   $('#manageMsg').style.color = res.ok ? 'green' : '#c0392b';
+  if (res.ok) loadPanel(); // keep the accounts table / audit log up to date
   return res.ok;
 }
 const formData = (form) => Object.fromEntries(new FormData(form).entries());
@@ -328,6 +407,124 @@ $('#inviteForm').addEventListener('submit', async (e) => {
     usernames: d.usernames.split(',').map((n) => n.trim()).filter(Boolean),
   });
 });
+
+// Class Representative (head student): teacher or admin appoints / removes
+$('#repForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const d = formData(e.target);
+  const res = await fetch('/api/lookup/' + encodeURIComponent(d.username.trim()), { headers: { Authorization: tok() } });
+  if (!res.ok) { $('#manageMsg').style.color = '#c0392b'; $('#manageMsg').textContent = (await res.json()).error; return; }
+  const u = await res.json();
+  await api('PATCH', `/api/admin/users/${u.id}/rep`, { course: d.course.trim().toUpperCase(), rep: d.rep === 'true' });
+});
+
+// ---------------------------------------------------------------- control panel (admin / super admin)
+async function getJson(url) {
+  const res = await fetch(url, { headers: { Authorization: tok() } });
+  return res.ok ? res.json() : null;
+}
+
+function cell(tr, text) {
+  const td = document.createElement('td');
+  td.textContent = text;
+  tr.appendChild(td);
+  return td;
+}
+
+function headRow(table, cols) {
+  table.innerHTML = '';
+  const tr = document.createElement('tr');
+  cols.forEach((c) => { const th = document.createElement('th'); th.textContent = c; tr.appendChild(th); });
+  table.appendChild(tr);
+}
+
+async function loadPanel() {
+  if (!me || !isAdminRole(me.role)) return;
+  const users = await getJson('/api/admin/users');
+  if (users) renderUserTable(users);
+  if (me.role === 'superadmin') {
+    const stats = await getJson('/api/admin/stats');
+    if (stats) renderStats(stats);
+    const log = await getJson('/api/admin/audit');
+    if (log) renderAudit(log);
+  }
+}
+
+function renderStats(s) {
+  const box = $('#stats');
+  box.innerHTML = '';
+  const items = [['Users', s.users], ['Online now', s.onlineNow], ['Groups', s.groups], ['Locked groups', s.lockedGroups], ['Messages stored', s.messages], ['Disabled accounts', s.disabled]];
+  Object.entries(s.byRole).forEach(([r, n]) => items.push([roleLabel(r) + 's', n]));
+  items.forEach(([label, value]) => {
+    const d = document.createElement('div');
+    d.className = 'stat';
+    const b = document.createElement('b');
+    b.textContent = value;
+    d.append(b, document.createTextNode(label));
+    box.appendChild(d);
+  });
+}
+
+function renderUserTable(users) {
+  const t = $('#userTable');
+  headRow(t, ['Name', 'Username', 'Role', 'Dept', 'Courses', 'CR of', 'Actions']);
+  users.forEach((u) => {
+    const tr = document.createElement('tr');
+    if (u.disabled) tr.className = 'off';
+    cell(tr, u.name);
+    cell(tr, u.username);
+    const roleTd = cell(tr, '');
+    if (me.role === 'superadmin' && u.id !== me.id) {
+      // super admin can promote / demote anybody (except himself)
+      const sel = document.createElement('select');
+      ['student', 'faculty', 'hod', 'staff', 'admin', 'superadmin'].forEach((r) => {
+        const o = document.createElement('option');
+        o.value = r; o.textContent = roleLabel(r); o.selected = r === u.role;
+        sel.appendChild(o);
+      });
+      sel.onchange = async () => { await api('PATCH', `/api/admin/users/${u.id}/role`, { role: sel.value }); loadPanel(); };
+      roleTd.appendChild(sel);
+    } else {
+      roleTd.textContent = roleLabel(u.role);
+    }
+    cell(tr, u.department);
+    cell(tr, (u.courses || []).join(', '));
+    cell(tr, (u.repOf || []).join(', '));
+    const act = cell(tr, '');
+    const manageable = u.id !== me.id && (me.role === 'superadmin' || !isAdminRole(u.role));
+    if (manageable) {
+      const dis = document.createElement('button');
+      dis.textContent = u.disabled ? 'Enable' : 'Disable';
+      dis.onclick = async () => { await api('PATCH', `/api/admin/users/${u.id}/status`, { disabled: !u.disabled }); loadPanel(); };
+      act.appendChild(dis);
+    }
+    if (manageable && me.role === 'superadmin') {
+      const del = document.createElement('button');
+      del.textContent = 'Delete';
+      del.className = 'danger';
+      del.onclick = async () => {
+        if (!confirm(`Delete ${u.username} permanently?`)) return;
+        await api('DELETE', `/api/admin/users/${u.id}`);
+        loadPanel();
+      };
+      act.appendChild(del);
+    }
+    t.appendChild(tr);
+  });
+}
+
+function renderAudit(rows) {
+  const t = $('#auditTable');
+  headRow(t, ['Time', 'Who', 'Action', 'Detail']);
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    cell(tr, new Date(r.at).toLocaleString());
+    cell(tr, r.actor);
+    cell(tr, r.action);
+    cell(tr, r.detail);
+    t.appendChild(tr);
+  });
+}
 
 // auto login after refresh
 const saved = sessionStorage.getItem('token');

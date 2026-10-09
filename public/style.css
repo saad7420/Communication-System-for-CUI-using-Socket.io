@@ -63,6 +63,44 @@ dialog { border: 0; border-radius: 10px; padding: 20px; width: min(900px, 94vw);
 .box h3 { margin: 0 0 4px; font-size: 15px; }
 #manageDlg button.ghost { color: var(--green-dark); border-color: var(--green-dark); margin-top: 10px; }
 
+/* roles / badges */
+.tag.superadmin { background: #6c2bd9; color: #fff; }
+.tag.admin { background: #c0392b; color: #fff; }
+.tag.hod { background: #e67e22; color: #fff; }
+.tag.faculty { background: #2980b9; color: #fff; }
+.tag.cr { background: #16a085; color: #fff; }
+
+/* chat header extras */
+.head-actions { display: flex; gap: 6px; }
+.pinned { background: #fff8dc; border-bottom: 1px solid #ecd98a; padding: 6px 16px; font-size: 13px; display: flex; gap: 8px; align-items: baseline; }
+.pinned b { color: #8a6d00; white-space: nowrap; }
+.pinned span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* message actions (pin / delete) appear on hover */
+.msg { position: relative; }
+.msg .acts { display: none; position: absolute; top: -10px; right: 6px; gap: 4px; }
+.msg:hover .acts { display: flex; }
+.msg .acts button { padding: 1px 6px; font-size: 11px; background: #fff; color: #333; border: 1px solid var(--line); }
+.msg .acts button:hover { background: #eee; }
+.msg.pin { outline: 2px solid #f1c40f; }
+
+/* control panel */
+.panel { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 12px; }
+.panel h3, .panel h4 { margin: 4px 0 8px; }
+button.mini { padding: 2px 8px; font-size: 11px; margin-left: 8px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.stat { background: #f0f2f5; border-radius: 6px; padding: 6px 12px; font-size: 12px; }
+.stat b { display: block; font-size: 18px; color: var(--green-dark); }
+.table-wrap { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.table-wrap.short { max-height: 160px; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.table-wrap th, .table-wrap td { padding: 5px 8px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; }
+.table-wrap th { background: #f0f2f5; position: sticky; top: 0; }
+.table-wrap td button { padding: 2px 7px; font-size: 11px; margin-right: 3px; }
+.table-wrap td select { width: auto; padding: 2px; font-size: 11px; }
+.table-wrap tr.off td { color: #999; text-decoration: line-through; }
+button.danger { background: #c0392b; }
+
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }
   .sidebar { max-height: 38vh; }

@@ -9,22 +9,42 @@ Design style: **rule-based (RBAC)** — permissions are *calculated* from who th
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 27 automatic checks of every boundary
+npm test           # 57 automatic checks of every boundary
 ```
+> If you still have an old `data/db.json`, just keep it: on start-up the server upgrades it automatically (adds the super admin, class-rep and mode fields). Delete the file to reset to demo data.
 Open the site in two different browsers (or one normal + one private window) and log in as two different users to see live chat.
 
 **Demo accounts** (password for all: `cui123`)
 
 | Username | Who | Department | Courses |
 |---|---|---|---|
+| `superadmin` | **Super Admin** | Administration | – |
 | `admin` | Admin Office | Administration | – |
 | `hod.cs` | Dr. Saima Tariq (HOD) | CS | – |
-| `ali.khan` | Dr. Ali Khan (Faculty) | CS | CSC102, CSC241 |
-| `sara.noor` | Ms. Sara Noor (Faculty) | EE | EEE101 |
-| `fa23-bcs-001` | Ahmed Raza (Student) | CS | CSC102, CSC241 |
+| `ali.khan` | Dr. Ali Khan (**Teacher**) | CS | CSC102, CSC241 |
+| `sara.noor` | Ms. Sara Noor (Teacher) | EE | EEE101 |
+| `fa23-bcs-001` | Ahmed Raza (Student, **Class Rep of CSC102**) | CS | CSC102, CSC241 |
 | `fa23-bcs-002` | Hina Fatima (Student) | CS | CSC102 |
 | `fa23-bee-010` | Bilal Hussain (Student) | EE | EEE101 |
 | `examcell` | Exam Cell (Staff) | Administration | – |
+
+---
+
+## 1b. Roles and what each one can do (NEW)
+
+| Role | Power |
+|---|---|
+| **Super Admin** | Everything an admin can do, plus: create/promote/demote **admins**, change any role, **disable / delete** accounts, read the **audit log** and **system statistics**. Cannot demote or delete himself. |
+| **Admin** | Add students/teachers/HODs/staff, set courses, create/delete groups, disable (not delete) normal accounts, appoint class reps. Cannot touch other admins or the super admin. |
+| **HOD** | Creates groups for own department, moderates department groups. |
+| **Teacher** (`faculty`) | Creates class groups for own courses, locks them, switches them to **announcement mode**, pins and deletes messages, invites members, **appoints Class Representatives** from students enrolled in his/her course. |
+| **Class Representative (CR / head student)** | A normal student appointed for one course. In announcement mode the CR can still post, and can **pin** messages. Cannot lock, delete, or change members. Not allowed to post in a locked group. |
+| **Student** | Reads/writes inside own groups; DM rules as before. |
+| **Staff** | Offices such as the Exam Cell. |
+
+New group features: **announcement mode** (only teacher + CR post), **pin message**, **delete message** (moderators), **disable account** (kicks the user out of the live socket at once), **audit log** (who did what, when).
+
+Try it: log in as `ali.khan` in one browser and `fa23-bcs-002` in another, open *CSC102*, click **Announcement mode** as the teacher, and watch the student's text box lock live. Then log in as `fa23-bcs-001` (the CR): he can still post and pin.
 
 ---
 
@@ -134,6 +154,22 @@ project-a-cui-connect/
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
-├── test/smoke.js      # 27 checks
+├── test/smoke.js      # 57 checks (REST + Socket.IO, all roles)
 └── data/              # db.json is created here on first run (delete it to reset demo data)
 ```
+
+---
+
+## 6. Extra viva questions for the new roles
+
+**Q12. How is the Super Admin different from the Admin?**
+Both pass every read/write rule, but only the Super Admin can create/promote/demote admins, delete accounts and read the audit log. These rules are `canCreateRole` and `canManageUser` in `policy.js`; the REST routes use small `adminOnly` / `superOnly` middleware.
+
+**Q13. How does a Class Representative work without a new role?**
+A CR is still a `student`. The user has a list `repOf: ['CSC102']`. `policy.isGroupRep()` checks it against the group's course. `canPost` lets a CR through announce mode, `canPin` lets a CR pin. Nothing else changes, so a CR cannot lock or delete.
+
+**Q14. What happens when an account is disabled while the user is online?**
+The REST route kills his sessions and calls `syncAllSockets()`, which disconnects every socket of a disabled user. The `io.use` handshake also refuses disabled users on reconnect.
+
+**Q15. Why an audit log?**
+Accountability: every sensitive action (create/disable user, role change, lock, mode switch, delete message) is stored with actor, action and time. Only the super admin can read it (`GET /api/admin/audit`, 403 for everyone else).

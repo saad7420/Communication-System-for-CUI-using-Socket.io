@@ -23,7 +23,23 @@ function verifyPassword(password, stored) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-let db = { counter: 100, users: [], groups: [], messages: {} };
+let db = { counter: 100, users: [], groups: [], messages: {}, audit: [] };
+
+const MAX_AUDIT = 500;
+// Audit log: WHO did WHAT and WHEN. Only the super admin / admin can read it.
+function audit(actor, action, detail = '') {
+  db.audit = db.audit || [];
+  db.audit.push({
+    id: nextId('a'),
+    at: Date.now(),
+    actorId: actor ? actor.id : null,
+    actor: actor ? `${actor.name} (${actor.role})` : 'system',
+    action,
+    detail,
+  });
+  if (db.audit.length > MAX_AUDIT) db.audit.shift();
+  save();
+}
 
 function nextId(prefix) {
   db.counter += 1;
@@ -39,7 +55,7 @@ function save() {
   }, 300);
 }
 
-function addUser({ name, username, password, role, department, semester = null, courses = [] }) {
+function addUser({ name, username, password, role, department, semester = null, courses = [], repOf = [] }) {
   const user = {
     id: nextId('u'),
     name,
@@ -49,6 +65,8 @@ function addUser({ name, username, password, role, department, semester = null, 
     department,
     semester,
     courses,
+    repOf,          // courses this student is Class Representative (CR) of
+    disabled: false, // a disabled account cannot log in
   };
   db.users.push(user);
   save();
@@ -65,6 +83,7 @@ function addGroup({ name, type, description = '', audience, posters, moderators,
     posters,
     moderators,
     locked: false,
+    mode: 'open', // 'open' | 'announce' (announce = only moderators + class reps post)
     createdBy,
   };
   db.groups.push(group);
@@ -86,7 +105,8 @@ function seed() {
   const hod = addUser({ name: 'Dr. Saima Tariq', username: 'hod.cs', password: pw, role: 'hod', department: 'CS' });
   const ali = addUser({ name: 'Dr. Ali Khan', username: 'ali.khan', password: pw, role: 'faculty', department: 'CS', courses: ['CSC102', 'CSC241'] });
   const sara = addUser({ name: 'Ms. Sara Noor', username: 'sara.noor', password: pw, role: 'faculty', department: 'EE', courses: ['EEE101'] });
-  addUser({ name: 'Ahmed Raza', username: 'fa23-bcs-001', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102', 'CSC241'] });
+  // Ahmed is the Class Representative (head student) of CSC102
+  addUser({ name: 'Ahmed Raza', username: 'fa23-bcs-001', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102', 'CSC241'], repOf: ['CSC102'] });
   addUser({ name: 'Hina Fatima', username: 'fa23-bcs-002', password: pw, role: 'student', department: 'CS', semester: 3, courses: ['CSC102'] });
   addUser({ name: 'Bilal Hussain', username: 'fa23-bee-010', password: pw, role: 'student', department: 'EE', semester: 3, courses: ['EEE101'] });
   const exam = addUser({ name: 'Exam Cell', username: 'examcell', password: pw, role: 'staff', department: 'Administration' });
@@ -156,12 +176,29 @@ function seed() {
   });
 }
 
+// Bring an OLD db.json (made before super admin / CR existed) up to date,
+// and make sure there is always one super admin who can log in.
+function migrate() {
+  db.audit = db.audit || [];
+  db.users.forEach((u) => {
+    u.repOf = u.repOf || [];
+    u.disabled = Boolean(u.disabled);
+  });
+  db.groups.forEach((g) => {
+    g.mode = g.mode || 'open';
+  });
+  if (!db.users.some((u) => u.role === 'superadmin')) {
+    addUser({ name: 'Super Admin', username: 'superadmin', password: 'cui123', role: 'superadmin', department: 'Administration' });
+  }
+}
+
 function load() {
   if (fs.existsSync(FILE)) {
     db = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   } else {
     seed();
   }
+  migrate();
 }
 load();
 
@@ -172,6 +209,8 @@ module.exports = {
   addUser,
   addGroup,
   addMessage,
+  audit,
+  hashPassword,
   verifyPassword,
   getUser: (id) => db.users.find((u) => u.id === id),
   getUserByUsername: (name) => db.users.find((u) => u.username === String(name).toLowerCase()),

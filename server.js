@@ -25,7 +25,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 const sessions = new Map();
 
 function publicUser(u) {
-  return { id: u.id, name: u.name, username: u.username, role: u.role, department: u.department, semester: u.semester, courses: u.courses };
+  return {
+    id: u.id, name: u.name, username: u.username, role: u.role, department: u.department,
+    semester: u.semester, courses: u.courses, repOf: u.repOf || [], disabled: Boolean(u.disabled),
+  };
+}
+
+// end every login session of a user (used when disabled / deleted / role changed)
+function killSessions(userId) {
+  for (const [token, id] of sessions) if (id === userId) sessions.delete(token);
 }
 
 function restAuth(req, res, next) {
@@ -42,6 +50,7 @@ app.post('/api/login', (req, res) => {
   if (!user || !store.verifyPassword(String(password || ''), user.passwordHash)) {
     return res.status(401).json({ error: 'Wrong username or password' });
   }
+  if (user.disabled) return res.status(403).json({ error: 'This account has been disabled. Contact the admin office.' });
   const token = crypto.randomBytes(24).toString('hex');
   sessions.set(token, user.id);
   res.json({ token, user: publicUser(user) });
@@ -60,9 +69,11 @@ function groupView(g, user) {
     type: g.type,
     description: g.description,
     locked: g.locked,
+    mode: g.mode || 'open',
     canPost: policy.canPost(user, g),
     canModerate: policy.canModerate(user, g),
-    members: store.db.users.filter((u) => policy.canRead(u, g)).length,
+    canPin: policy.canPin(user, g),
+    members: store.db.users.filter((u) => !u.disabled && policy.canRead(u, g)).length,
   };
 }
 
@@ -71,7 +82,7 @@ function snapshot(user) {
     me: publicUser(user),
     groups: store.db.groups.filter((g) => policy.canRead(user, g)).map((g) => groupView(g, user)),
     contacts: store.db.users
-      .filter((u) => policy.canDM(user, u))
+      .filter((u) => !u.disabled && policy.canDM(user, u))
       .map((u) => ({ ...publicUser(u), online: isOnline(u.id) })),
   };
 }
@@ -83,7 +94,7 @@ const dmRoom = (a, b) => 'dm:' + [a, b].sort().join('_');
 function syncAllSockets() {
   for (const socket of io.sockets.sockets.values()) {
     const user = store.getUser(socket.data.userId);
-    if (!user) { socket.disconnect(true); continue; }
+    if (!user || user.disabled) { socket.disconnect(true); continue; }
     for (const g of store.db.groups) {
       if (policy.canRead(user, g)) socket.join('g:' + g.id);
       else socket.leave('g:' + g.id);
@@ -93,20 +104,27 @@ function syncAllSockets() {
 }
 
 // ------------------------- admin / management REST -------------------------
-const ROLES = ['student', 'faculty', 'hod', 'staff', 'admin'];
+const ROLES = ['student', 'faculty', 'hod', 'staff', 'admin', 'superadmin'];
 
-app.get('/api/admin/users', restAuth, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+// small guards used by the routes below (the real rules are in policy.js)
+const adminOnly = (req, res, next) =>
+  policy.isAdmin(req.user) ? next() : res.status(403).json({ error: 'Admin only' });
+const superOnly = (req, res, next) =>
+  policy.isSuperAdmin(req.user) ? next() : res.status(403).json({ error: 'Super admin only' });
+
+app.get('/api/admin/users', restAuth, adminOnly, (req, res) => {
   res.json(store.db.users.map(publicUser));
 });
 
-app.post('/api/admin/users', restAuth, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only the admin office can add users' });
+app.post('/api/admin/users', restAuth, adminOnly, (req, res) => {
   const { name, username, password, role, department, semester, courses } = req.body || {};
   if (!name || !username || !password || !ROLES.includes(role) || !department) {
     return res.status(400).json({ error: 'name, username, password, role and department are required' });
   }
+  // only the super admin can create admins / other super admins
+  if (!policy.canCreateRole(req.user, role)) return res.status(403).json({ error: 'You are not allowed to create a ' + role });
   if (store.getUserByUsername(username)) return res.status(409).json({ error: 'Username already exists' });
+  store.audit(req.user, 'user.create', `${String(username).trim()} (${role})`);
   const user = store.addUser({
     name: String(name).trim(),
     username: String(username).trim(),
@@ -121,15 +139,106 @@ app.post('/api/admin/users', restAuth, (req, res) => {
 });
 
 // admin can enrol / drop a student or faculty in a course
-app.patch('/api/admin/users/:id/courses', restAuth, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+app.patch('/api/admin/users/:id/courses', restAuth, adminOnly, (req, res) => {
   const target = store.getUser(req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found' });
   const courses = Array.isArray(req.body.courses) ? req.body.courses : [];
   target.courses = courses.map((c) => String(c).trim()).filter(Boolean);
+  // a student who is no longer enrolled cannot stay Class Representative
+  target.repOf = (target.repOf || []).filter((c) => target.courses.includes(c));
+  store.audit(req.user, 'user.courses', `${target.username}: ${target.courses.join(', ') || '(none)'}`);
   store.save();
   syncAllSockets();
   res.json(publicUser(target));
+});
+
+// ---- SUPER ADMIN: change the role of a user (promote / demote admins) ----
+app.patch('/api/admin/users/:id/role', restAuth, superOnly, (req, res) => {
+  const target = store.getUser(req.params.id);
+  const { role } = req.body || {};
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!ROLES.includes(role)) return res.status(400).json({ error: 'Unknown role' });
+  if (!policy.canManageUser(req.user, target)) return res.status(403).json({ error: 'You cannot change your own role' });
+  const old = target.role;
+  target.role = role;
+  if (role !== 'student') target.repOf = [];
+  store.audit(req.user, 'user.role', `${target.username}: ${old} -> ${role}`);
+  store.save();
+  syncAllSockets();
+  res.json(publicUser(target));
+});
+
+// ---- ADMIN / SUPER ADMIN: disable or enable an account ----
+app.patch('/api/admin/users/:id/status', restAuth, adminOnly, (req, res) => {
+  const target = store.getUser(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!policy.canManageUser(req.user, target)) return res.status(403).json({ error: 'You cannot change this account' });
+  target.disabled = Boolean((req.body || {}).disabled);
+  if (target.disabled) killSessions(target.id);
+  store.audit(req.user, target.disabled ? 'user.disable' : 'user.enable', target.username);
+  store.save();
+  syncAllSockets(); // disconnects the user's open sockets if disabled
+  broadcastPresence();
+  res.json(publicUser(target));
+});
+
+// ---- SUPER ADMIN: delete an account for good ----
+app.delete('/api/admin/users/:id', restAuth, superOnly, (req, res) => {
+  const target = store.getUser(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!policy.canManageUser(req.user, target)) return res.status(403).json({ error: 'You cannot delete yourself' });
+  killSessions(target.id);
+  store.db.users = store.db.users.filter((u) => u.id !== target.id);
+  store.audit(req.user, 'user.delete', target.username);
+  store.save();
+  syncAllSockets();
+  res.json({ ok: true });
+});
+
+// ---- TEACHER / ADMIN: appoint or remove a Class Representative (head student) ----
+// body: { course: 'CSC102', rep: true | false }
+app.patch('/api/admin/users/:id/rep', restAuth, (req, res) => {
+  const target = store.getUser(req.params.id);
+  const { course, rep } = req.body || {};
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!policy.canAssignRep(req.user, target, String(course || ''))) {
+    return res.status(403).json({ error: 'You can only appoint a CR (an enrolled student) for a course you teach' });
+  }
+  const set = new Set(target.repOf || []);
+  if (rep) set.add(course); else set.delete(course);
+  target.repOf = [...set];
+  store.audit(req.user, rep ? 'rep.appoint' : 'rep.remove', `${target.username} for ${course}`);
+  store.save();
+  syncAllSockets();
+  res.json(publicUser(target));
+});
+
+// ---- find a user by username (teachers need this to pick a student for CR) ----
+app.get('/api/lookup/:username', restAuth, (req, res) => {
+  if (!policy.isAdmin(req.user) && req.user.role !== 'faculty') return res.status(403).json({ error: 'Not allowed' });
+  const u = store.getUserByUsername(req.params.username);
+  if (!u) return res.status(404).json({ error: 'No such user' });
+  res.json(publicUser(u));
+});
+
+// ---- SUPER ADMIN: audit log and system statistics ----
+app.get('/api/admin/audit', restAuth, superOnly, (req, res) => {
+  res.json((store.db.audit || []).slice(-100).reverse());
+});
+
+app.get('/api/admin/stats', restAuth, superOnly, (req, res) => {
+  const byRole = {};
+  for (const u of store.db.users) byRole[u.role] = (byRole[u.role] || 0) + 1;
+  const messages = Object.values(store.db.messages).reduce((n, list) => n + list.length, 0);
+  res.json({
+    users: store.db.users.length,
+    byRole,
+    disabled: store.db.users.filter((u) => u.disabled).length,
+    groups: store.db.groups.length,
+    lockedGroups: store.db.groups.filter((g) => g.locked).length,
+    messages,
+    onlineNow: [...onlineCount.keys()].filter(isOnline).length,
+  });
 });
 
 // Turn a simple form choice into rule objects, and check the creator is allowed.
@@ -147,7 +256,7 @@ function buildGroupRules(creator, body) {
     if (audienceType !== 'department' || audienceValue !== creator.department) {
       return { error: 'HOD can only create groups for their own department' };
     }
-  } else if (creator.role !== 'admin') {
+  } else if (!policy.isAdmin(creator)) {
     return { error: 'Your role cannot create groups' };
   }
 
@@ -191,6 +300,7 @@ app.post('/api/admin/groups', restAuth, (req, res) => {
   if (rules.error) return res.status(403).json({ error: rules.error });
   const type = req.body.audienceType === 'course' ? 'class' : req.body.audienceType === 'department' ? 'department' : 'custom';
   const g = store.addGroup({ name: String(name).trim(), type, description: String(description), ...rules, createdBy: req.user.id });
+  store.audit(req.user, 'group.create', g.name);
   syncAllSockets();
   res.json({ id: g.id, name: g.name });
 });
@@ -210,8 +320,10 @@ app.patch('/api/admin/groups/:id/members', restAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/groups/:id', restAuth, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+app.delete('/api/admin/groups/:id', restAuth, adminOnly, (req, res) => {
+  const old = store.getGroup(req.params.id);
+  if (!old) return res.status(404).json({ error: 'Group not found' });
+  store.audit(req.user, 'group.delete', old.name);
   store.db.groups = store.db.groups.filter((g) => g.id !== req.params.id);
   store.save();
   syncAllSockets();
@@ -222,18 +334,23 @@ app.delete('/api/admin/groups/:id', restAuth, (req, res) => {
 // Handshake check: no valid token, no connection at all.
 io.use((socket, next) => {
   const userId = sessions.get(socket.handshake.auth && socket.handshake.auth.token);
-  if (!userId || !store.getUser(userId)) return next(new Error('Not authenticated'));
+  const u = userId && store.getUser(userId);
+  if (!u || u.disabled) return next(new Error('Not authenticated'));
   socket.data.userId = userId;
   next();
 });
 
 const MAX_TEXT = 1000;
-// flood control: at most 5 messages per 3 seconds per socket
+// flood control: at most 5 messages per 3 seconds per USER
+// (keyed by user id, so opening many tabs does not give extra allowance)
+const sentLog = new Map(); // userId -> [timestamps]
 function tooFast(socket) {
   const now = Date.now();
-  socket.data.sent = (socket.data.sent || []).filter((t) => now - t < 3000);
-  if (socket.data.sent.length >= 5) return true;
-  socket.data.sent.push(now);
+  const id = socket.data.userId;
+  const recent = (sentLog.get(id) || []).filter((t) => now - t < 3000);
+  if (recent.length >= 5) { sentLog.set(id, recent); return true; }
+  recent.push(now);
+  sentLog.set(id, recent);
   return false;
 }
 
@@ -247,7 +364,8 @@ function makeMessage(room, user, text) {
   return {
     id: store.nextId('m'),
     room,
-    from: { id: user.id, name: user.name, role: user.role },
+    // rep = this sender is the Class Representative of the group's course
+    from: { id: user.id, name: user.name, role: user.role, rep: policy.isGroupRep(user, room.startsWith('g:') ? (store.getGroup(room.slice(2)) || {}) : {}) },
     text,
     at: Date.now(),
   };
@@ -320,11 +438,59 @@ io.on('connection', (socket) => {
     const g = store.getGroup(groupId);
     if (!g || !policy.canModerate(u, g)) return ack({ ok: false, error: 'Only moderators can lock a group' });
     g.locked = Boolean(locked);
+    store.audit(u, g.locked ? 'group.lock' : 'group.unlock', g.name);
     store.save();
     const notice = makeMessage('g:' + g.id, { id: 'system', name: 'System', role: 'system' }, g.locked ? `${u.name} locked this group. Only moderators can post.` : `${u.name} unlocked this group.`);
     store.addMessage(notice.room, notice);
     io.to(notice.room).emit('message:new', notice);
     syncAllSockets();
+    ack({ ok: true });
+  });
+
+  // ---- moderator switches a group between 'open' and 'announce' mode ----
+  // announce mode: only moderators (teacher / HOD / admin) and the Class
+  // Representatives of the course may post. Everybody else can only read.
+  socket.on('group:mode', ({ groupId, mode } = {}, ack = () => {}) => {
+    const u = me();
+    const g = store.getGroup(groupId);
+    if (!g || !policy.canSetMode(u, g)) return ack({ ok: false, error: 'Only moderators can change the group mode' });
+    if (!['open', 'announce'].includes(mode)) return ack({ ok: false, error: 'Unknown mode' });
+    g.mode = mode;
+    store.audit(u, 'group.mode', `${g.name}: ${mode}`);
+    const notice = makeMessage('g:' + g.id, { id: 'system', name: 'System', role: 'system' },
+      mode === 'announce' ? `${u.name} switched this group to ANNOUNCEMENT mode. Only teachers and class representatives can post.` : `${u.name} switched this group back to open chat.`);
+    store.addMessage(notice.room, notice);
+    io.to(notice.room).emit('message:new', notice);
+    syncAllSockets();
+    ack({ ok: true });
+  });
+
+  // ---- pin / unpin a message (moderators and the course's CR) ----
+  socket.on('message:pin', ({ groupId, messageId, pinned } = {}, ack = () => {}) => {
+    const u = me();
+    const g = store.getGroup(groupId);
+    if (!g || !policy.canPin(u, g)) return ack({ ok: false, error: 'You cannot pin messages here' });
+    const room = 'g:' + g.id;
+    const msg = (store.db.messages[room] || []).find((m) => m.id === messageId);
+    if (!msg || msg.from.role === 'system') return ack({ ok: false, error: 'Message not found' });
+    msg.pinned = Boolean(pinned);
+    store.save();
+    io.to(room).emit('message:updated', msg);
+    ack({ ok: true });
+  });
+
+  // ---- delete a message (moderators only; a CR cannot delete) ----
+  socket.on('message:delete', ({ groupId, messageId } = {}, ack = () => {}) => {
+    const u = me();
+    const g = store.getGroup(groupId);
+    if (!g || !policy.canDeleteMessages(u, g)) return ack({ ok: false, error: 'Only moderators can delete messages' });
+    const room = 'g:' + g.id;
+    const list = store.db.messages[room] || [];
+    const msg = list.find((m) => m.id === messageId);
+    if (!msg) return ack({ ok: false, error: 'Message not found' });
+    store.db.messages[room] = list.filter((m) => m.id !== messageId);
+    store.audit(u, 'message.delete', `in ${g.name}, from ${msg.from.name}`);
+    io.to(room).emit('message:deleted', { room, id: messageId });
     ack({ ok: true });
   });
 

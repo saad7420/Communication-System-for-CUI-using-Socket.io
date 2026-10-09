@@ -18,7 +18,7 @@
       <p id="loginError" class="error"></p>
       <details class="demo">
         <summary>Demo accounts (password: cui123)</summary>
-        <code>admin &middot; hod.cs &middot; ali.khan &middot; sara.noor<br />fa23-bcs-001 &middot; fa23-bcs-002 &middot; fa23-bee-010 &middot; examcell</code>
+        <code>superadmin &middot; admin &middot; hod.cs &middot; ali.khan (teacher) &middot; sara.noor<br />fa23-bcs-001 (class rep of CSC102) &middot; fa23-bcs-002 &middot; fa23-bee-010 &middot; examcell</code>
       </details>
     </form>
   </section>
@@ -45,8 +45,12 @@
           <strong id="roomTitle">Select a chat</strong>
           <div id="roomSub" class="muted small"></div>
         </div>
-        <button id="lockBtn" class="ghost hidden"></button>
+        <div class="head-actions">
+          <button id="modeBtn" class="ghost hidden"></button>
+          <button id="lockBtn" class="ghost hidden"></button>
+        </div>
       </header>
+      <div id="pinned" class="pinned hidden"></div>
       <div id="messages" class="messages"></div>
       <div id="typing" class="typing small muted"></div>
       <form id="composer" class="composer">
@@ -66,7 +70,13 @@
         <input name="name" placeholder="Full name" required />
         <input name="username" placeholder="Username / Reg. No" required />
         <input name="password" placeholder="Password" required />
-        <select name="role"><option>student</option><option>faculty</option><option>hod</option><option>staff</option></select>
+        <select name="role" id="newRole">
+          <option value="student">Student</option>
+          <option value="faculty">Teacher</option>
+          <option value="hod">HOD</option>
+          <option value="staff">Staff (office)</option>
+          <option value="admin" class="super-only">Admin (super admin only)</option>
+        </select>
         <input name="department" placeholder="Department (CS, EE, BBA...)" required />
         <input name="semester" placeholder="Semester (students)" />
         <input name="courses" placeholder="Courses e.g. CSC102,CSC241" />
@@ -107,7 +117,28 @@
         <select name="action"><option value="add">Add</option><option value="remove">Remove</option></select>
         <button>Apply</button>
       </form>
+
+      <form id="repForm" class="box rep-only">
+        <h3>Class Representative (head student)</h3>
+        <p class="muted small">The CR can post when the class group is in announcement mode and can pin messages.</p>
+        <input name="username" placeholder="Student username (fa23-bcs-002)" required />
+        <input name="course" placeholder="Course, e.g. CSC102" required />
+        <select name="rep"><option value="true">Appoint as CR</option><option value="false">Remove as CR</option></select>
+        <button>Apply</button>
+      </form>
     </div>
+
+    <!-- SUPER ADMIN / ADMIN control panel -->
+    <section id="superPanel" class="panel admin-only">
+      <h3>System control <button id="refreshPanel" class="mini" type="button">Refresh</button></h3>
+      <div id="stats" class="stats super-only"></div>
+      <h4>All accounts</h4>
+      <div class="table-wrap"><table id="userTable"></table></div>
+      <div class="super-only">
+        <h4>Audit log (latest 100 actions)</h4>
+        <div class="table-wrap short"><table id="auditTable"></table></div>
+      </div>
+    </section>
     <p id="manageMsg" class="small"></p>
     <button id="closeManage" class="ghost">Close</button>
   </dialog>
