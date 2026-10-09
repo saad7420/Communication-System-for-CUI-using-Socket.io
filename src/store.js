@@ -176,10 +176,142 @@ function seed() {
   });
 }
 
+// ---------------- announcements (notice board) ----------------
+const ANN_CATEGORIES = ['opportunity', 'policy', 'academic', 'exam', 'event', 'general'];
+const ANN_PRIORITIES = ['normal', 'important', 'urgent'];
+
+function addAnnouncement({ title, body, category = 'general', priority = 'normal', audience = { everyone: true },
+  link = '', linkLabel = '', deadline = null, pinned = false, author, at = Date.now() }) {
+  const a = {
+    id: nextId('n'),
+    title,
+    body,
+    category,
+    priority,
+    audience,
+    link,
+    linkLabel,
+    deadline,           // 'YYYY-MM-DD' or null (apply-by / last date)
+    pinned,
+    createdBy: author.id,
+    author: { name: author.name, role: author.role, department: author.department },
+    at,
+    updatedAt: at,
+    readBy: [],         // user ids that opened it (gives "seen by" for the publisher)
+    savedBy: [],        // user ids that bookmarked it
+  };
+  db.announcements.unshift(a);
+  save();
+  return a;
+}
+
+// ---------------- course requests (tickets to admin) ----------------
+const REQ_TYPES = ['add_drop', 'clash', 'section', 'grade', 'enrolment', 'teacher', 'other'];
+const REQ_STATUS = ['open', 'in_review', 'resolved', 'rejected'];
+
+function addRequest({ type, course, subject, details, user, at = Date.now() }) {
+  db.reqCounter = (db.reqCounter || 1000) + 1;
+  const r = {
+    id: nextId('r'),
+    ref: 'REQ-' + db.reqCounter,
+    type,
+    course,
+    subject,
+    details,
+    status: 'open',
+    createdBy: user.id,
+    requester: { name: user.name, username: user.username, role: user.role },
+    department: user.department,
+    at,
+    updatedAt: at,
+    thread: [],         // replies + status changes, oldest first
+  };
+  db.requests.unshift(r);
+  save();
+  return r;
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+const isoDay = (offsetDays) => new Date(Date.now() + offsetDays * DAY).toISOString().slice(0, 10);
+
+// demo notices so the board is not empty on first start (all invented for the demo)
+function seedNotices() {
+  const byName = (n) => db.users.find((u) => u.username === n);
+  const admin = byName('admin') || db.users.find((u) => u.role === 'admin' || u.role === 'superadmin');
+  const hod = byName('hod.cs') || admin;
+  const exam = byName('examcell') || admin;
+  const ago = (h) => Date.now() - h * 60 * 60 * 1000;
+
+  addAnnouncement({
+    author: admin, at: ago(240), category: 'general',
+    title: 'Library opens until 10 pm during exam weeks',
+    body: 'The Junaid Zaidi Library will stay open until 10:00 pm, Monday to Saturday, for the midterm and final exam weeks. Bring your student card; the reading hall on the first floor is reserved for silent study.',
+  });
+  addAnnouncement({
+    author: hod, at: ago(120), category: 'academic', priority: 'important', audience: { departments: ['CS'] },
+    deadline: isoDay(12),
+    title: 'Final Year Project proposals due',
+    body: 'BCS and BSE students in their 7th semester must submit the FYP proposal form, signed by the supervisor, to the department office. Groups of up to three are allowed. Late proposals will move to the next evaluation cycle.',
+    link: 'https://islamabad.comsats.edu.pk/', linkLabel: 'Download proposal form',
+  });
+  addAnnouncement({
+    author: admin, at: ago(96), category: 'policy',
+    title: 'Attendance rule reminder: 80% to sit the final exam',
+    body: 'Students with less than 80% attendance in a course will not be allowed to appear in its final exam. Leave for medical reasons must be submitted to the course teacher within three working days with a valid certificate.',
+  });
+  addAnnouncement({
+    author: admin, at: ago(52), category: 'event',
+    deadline: isoDay(9),
+    title: 'Career Development Center job fair, Main Auditorium',
+    body: 'Software houses, banks and telecom companies are coming to campus to hire final-year students and fresh graduates. Bring printed CVs. Register beforehand so the CDC can share your profile with employers.',
+    link: 'https://islamabad.comsats.edu.pk/', linkLabel: 'Register for the fair',
+  });
+  addAnnouncement({
+    author: exam, at: ago(30), category: 'exam', priority: 'important',
+    title: 'Midterm date sheet published',
+    body: 'The midterm date sheet for all programs is now available. Check your seat number on the notice board outside the Exam Cell one day before each paper. Clashes must be reported through CUI Connect (Requests) within 48 hours.',
+  });
+  addAnnouncement({
+    author: admin, at: ago(20), category: 'opportunity', priority: 'urgent', pinned: true,
+    deadline: isoDay(5),
+    title: 'Need-based scholarship applications are open',
+    body: 'Undergraduate students from the 2nd semester onwards can apply for need-based financial assistance for the current semester. Attach the family income certificate and utility bills. Incomplete applications will not be considered.',
+    link: 'https://islamabad.comsats.edu.pk/', linkLabel: 'Apply now',
+  });
+  addAnnouncement({
+    author: admin, at: ago(3), category: 'academic', priority: 'urgent',
+    deadline: isoDay(2),
+    title: 'Course add / drop window closes this week',
+    body: 'Add or drop courses through the student portal before the window closes. After that date, a course can only be withdrawn (W grade). If the portal shows a clash or a missing prerequisite, open a request here and the admin office will fix it.',
+  });
+
+  // two demo requests so the admin office has something to look at
+  const hina = byName('fa23-bcs-002');
+  const ahmed = byName('fa23-bcs-001');
+  if (hina) {
+    const r = addRequest({ user: hina, at: ago(26), type: 'clash', course: 'CSC241',
+      subject: 'CSC241 lab clashes with MTH104 lecture',
+      details: 'My CSC241 lab (Thursday 11:30) is at the same time as the MTH104 lecture of section B. Can I move to the Friday lab slot?' });
+    r.status = 'in_review';
+    r.thread.push({ kind: 'status', status: 'in_review', from: { name: admin.name, role: admin.role }, text: 'Checking free seats in the Friday lab.', at: ago(20) });
+    r.updatedAt = ago(20);
+  }
+  if (ahmed) {
+    addRequest({ user: ahmed, at: ago(5), type: 'enrolment', course: 'CSC102',
+      subject: 'Two students missing from the CSC102 channel',
+      details: 'As CR I noticed fa23-bcs-014 and fa23-bcs-019 are registered in CSC102 on the portal but do not appear in the class channel here.' });
+  }
+}
+
 // Bring an OLD db.json (made before super admin / CR existed) up to date,
 // and make sure there is always one super admin who can log in.
 function migrate() {
   db.audit = db.audit || [];
+  if (!Array.isArray(db.announcements) || !Array.isArray(db.requests)) {
+    db.announcements = db.announcements || [];
+    db.requests = db.requests || [];
+    if (!db.announcements.length) seedNotices();
+  }
   db.users.forEach((u) => {
     u.repOf = u.repOf || [];
     u.disabled = Boolean(u.disabled);
@@ -209,6 +341,14 @@ module.exports = {
   addUser,
   addGroup,
   addMessage,
+  addAnnouncement,
+  addRequest,
+  ANN_CATEGORIES,
+  ANN_PRIORITIES,
+  REQ_TYPES,
+  REQ_STATUS,
+  getAnnouncement: (id) => db.announcements.find((a) => a.id === id),
+  getRequest: (id) => db.requests.find((r) => r.id === id),
   audit,
   hashPassword,
   verifyPassword,

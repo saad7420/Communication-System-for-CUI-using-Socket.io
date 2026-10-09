@@ -151,9 +151,47 @@ function canDM(a, b) {
   }
 }
 
+// ---------------- announcements (notice board) ----------------
+// An announcement has an `audience` spec, exactly like a group.
+// Who may PUBLISH to an audience?
+//   admin / superadmin -> anybody
+//   staff (Exam Cell, CDC...) -> the whole university (offices talk to everyone)
+//   hod   -> only his/her own department
+//   faculty / student -> nobody (teachers use their class channel instead)
+function canPublishAnnouncement(user, audience) {
+  if (!audience) return false;
+  if (isAdmin(user)) return true;
+  if (user.role === 'staff') return Boolean(audience.everyone) && !audience.departments && !audience.roles;
+  if (user.role === 'hod') {
+    return Array.isArray(audience.departments) && audience.departments.length === 1 &&
+      audience.departments[0] === user.department && !audience.roles;
+  }
+  return false;
+}
+
+const canSeeAnnouncement = (user, a) => matches(user, a.audience);
+
+// edit / pin / delete: admins, or the person who published it
+const canEditAnnouncement = (user, a) => isAdmin(user) || a.createdBy === user.id;
+
+// ---------------- course requests (tickets to the admin office) ----------------
+// Anybody who is not an admin can open a request (student, teacher, CR...).
+const canOpenRequest = (user) => !isAdmin(user);
+
+// Who handles a request (change status, reply as the office)?
+//   admin / superadmin -> every request
+//   hod                -> requests from his/her own department
+const canHandleRequest = (user, r) =>
+  isAdmin(user) || (user.role === 'hod' && user.department === r.department);
+
+// Who can see it: the person who opened it + the people who handle it.
+const canSeeRequest = (user, r) => r.createdBy === user.id || canHandleRequest(user, r);
+
 module.exports = {
   matches, canRead, canPost, canModerate, canDM,
   isSuperAdmin, isAdmin, isRepOf, isGroupRep,
   canPin, canDeleteMessages, canSetMode,
   canCreateRole, canManageUser, canAssignRep,
+  canPublishAnnouncement, canSeeAnnouncement, canEditAnnouncement,
+  canOpenRequest, canHandleRequest, canSeeRequest,
 };

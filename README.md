@@ -1,5 +1,7 @@
 # CUI Connect — Project A
-**Campus communication system for COMSATS University Islamabad using Socket.IO**
+**A Slack-style campus workspace for COMSATS University Islamabad, built on Socket.IO**
+
+Everyone at CUI on one platform: a **notice board** for opportunities, policies and academic updates, **channels** for every course and department, **direct messages** with boundaries, and **course requests** that go straight to the admin office.
 Design style: **rule-based (RBAC)** — permissions are *calculated* from who the user is (role, department, course).
 
 ---
@@ -9,8 +11,9 @@ Design style: **rule-based (RBAC)** — permissions are *calculated* from who th
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 57 automatic checks of every boundary
+npm test           # 83 automatic checks of every boundary
 ```
+> The login page lists every demo account; click one to sign in.
 > If you still have an old `data/db.json`, just keep it: on start-up the server upgrades it automatically (adds the super admin, class-rep and mode fields). Delete the file to reset to demo data.
 Open the site in two different browsers (or one normal + one private window) and log in as two different users to see live chat.
 
@@ -48,6 +51,52 @@ Try it: log in as `ali.khan` in one browser and `fa23-bcs-002` in another, open 
 
 ---
 
+## 1c. What's new in v3 (Slack-style UI, notice board, requests)
+
+### Interface
+Slack-style layout: workspace rail on the far left (Notices, Chat, Requests, Manage), a sidebar with Announcements, Requests, **Channels** and **Direct messages**, the main pane in the middle and a details pane on the right. A search bar on top (**Ctrl/Cmd + K**) jumps to any channel, person or notice. Works on phones (the sidebar becomes a drawer). Fonts are bundled in `public/fonts`, so it works without internet.
+
+### Notice board (Announcements page)
+| Who | What they can do |
+|---|---|
+| Admin / Super Admin | Publish to everyone, one department, only students or only teachers. Pin, edit, delete any notice. |
+| Staff office (Exam Cell, CDC) | Publish to everyone. |
+| HOD | Publish to **own department only**. |
+| Teacher / Student | Read, save for later. (Teachers post in their class channel instead.) |
+
+- Six types, each with its own colour: **Opportunity, Academic, Exams, Policy, Event, General**; priority **Normal / Important / Urgent**.
+- Optional **last date** (shows a countdown and a "Closing soon" list) and **button link** (e.g. *Apply now*). Only `http(s)` links are accepted.
+- The pinned (or urgent) notice is shown as a large card at the top; the rest are grouped *Today / This week / Earlier*.
+- Filters: All / Unread / Saved, plus category chips. Unread notices have a dot and a count in the sidebar.
+- **Live:** when a notice is published, everyone in its audience gets a pop-up instantly (Socket.IO), and the board refreshes.
+- The publisher sees **reach**: "seen by 12 of 340 people".
+- The composer shows a **live preview** of how the notice will look.
+
+### Course requests (tickets to the admin office)
+- Any student or teacher can report a course problem: add/drop, timetable clash, section change, result/grade, missing from class channel, teacher/class issue, other.
+- Each request gets a reference (`REQ-1001`) and a status: **Open → In review → Resolved / Declined**.
+- **Admin** sees and handles every request; an **HOD** handles requests from their own department; the student sees only their own.
+- Replies and status changes (with an optional note) form a conversation thread, pushed live to both sides.
+- A student can have at most 5 active requests (anti-spam); a closed request can't be replied to (open a new one).
+
+### Manage
+Tabs instead of one long dialog: **People** (searchable table, add person, change role, disable, delete), **Channels** (create, add/remove members), **Class reps & courses**, **Overview & activity** (super admin: stats + audit log). Each role only sees the tabs it can use.
+
+### New REST endpoints
+| Method | URL | Who |
+|---|---|---|
+| GET | `/api/announcements` | everyone (filtered by audience) |
+| POST | `/api/announcements` | admin, staff, HOD (own dept) |
+| PATCH / DELETE | `/api/announcements/:id` | publisher or admin |
+| POST | `/api/announcements/:id/read`, `/save` | anyone who can see it |
+| GET / POST | `/api/requests` | own requests / handlers see more |
+| POST | `/api/requests/:id/reply` | requester + handlers |
+| PATCH | `/api/requests/:id/status` | admin, HOD of that department |
+
+New socket events (server → client): `board`, `announcement:new`, `requests`.
+
+---
+
 ## 2. What real COMSATS problem does it solve?
 At the moment, class notices go through WhatsApp groups where *anyone* can post, students can message any teacher at any time, and nobody controls who is in which group. This system gives each type of conversation its own rules:
 
@@ -81,7 +130,7 @@ Browser (public/app.js)  <--- Socket.IO --->  server.js  --->  src/policy.js  (a
 | `src/policy.js` | **The brain.** `canRead`, `canPost`, `canModerate`, `canDM`. Every boundary is in this one file. |
 | `src/store.js` | Small database (memory + JSON file), password hashing (scrypt + salt), demo seed data. |
 | `server.js` | Express (login + admin APIs) and Socket.IO (live chat). Asks `policy.js` before every action. |
-| `public/*` | The user interface. It only *shows* things; the server re-checks everything. |
+| `public/*` | The user interface (vanilla JS, no framework). It only *shows* things; the server re-checks everything. All user text is inserted with `textContent`. |
 
 ### Socket.IO ideas used
 - **Authentication in the handshake** – `io.use(...)` checks the token; no token = no socket.
@@ -153,8 +202,9 @@ project-a-cui-connect/
 ├── public/
 │   ├── index.html
 │   ├── style.css
-│   └── app.js
-├── test/smoke.js      # 57 checks (REST + Socket.IO, all roles)
+│   ├── app.js         # Slack-style UI: board, chat, requests, manage
+│   └── fonts/         # bundled Figtree + Bricolage Grotesque (OFL)
+├── test/smoke.js      # 83 checks (REST + Socket.IO, all roles)
 └── data/              # db.json is created here on first run (delete it to reset demo data)
 ```
 
@@ -173,3 +223,23 @@ The REST route kills his sessions and calls `syncAllSockets()`, which disconnect
 
 **Q15. Why an audit log?**
 Accountability: every sensitive action (create/disable user, role change, lock, mode switch, delete message) is stored with actor, action and time. Only the super admin can read it (`GET /api/admin/audit`, 403 for everyone else).
+
+## 7. Viva questions for v3 (notice board + requests)
+
+**Q16. How does a student only see notices meant for them?**
+Each announcement stores an `audience` spec, the same format as a group (`{everyone:true}`, `{departments:['CS']}`, `{roles:['student']}`). `policy.canSeeAnnouncement` reuses `matches()`. The server filters the list per user before sending it, so an EE student never even receives the CS-only notice.
+
+**Q17. How is a new notice delivered live?**
+After saving, `pushBoard()` loops over connected sockets, sends each one *their own filtered* board (`board` event) and, if they're in the audience, a small `announcement:new` event that shows the pop-up.
+
+**Q18. Why can't an HOD publish to everyone?**
+`canPublishAnnouncement` allows an HOD only an audience of exactly their own department. The check is on the server, so editing the dropdown in the browser does nothing (test: "HOD cannot publish to everyone (403)").
+
+**Q19. Could someone put a `javascript:` link in a notice?**
+No. The server only accepts links starting with `http://` or `https://` (400 otherwise), and the browser opens them with `rel="noopener noreferrer"`.
+
+**Q20. Who can see a request?**
+`canSeeRequest = the person who opened it OR canHandleRequest` (admin, or HOD of the same department). Everyone else gets 404, so they can't even confirm it exists.
+
+**Q21. How do you know who has read a notice?**
+Opening a notice calls `POST /api/announcements/:id/read`, which adds the user id to `readBy`. Only the publisher/admin receives `seenBy` and `reach` in the view; other users get `undefined`.

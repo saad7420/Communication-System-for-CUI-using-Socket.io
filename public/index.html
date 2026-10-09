@@ -7,141 +7,268 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ============ LOGIN ============ -->
+  <!-- ======================= LOGIN ======================= -->
   <section id="loginView" class="login">
-    <form id="loginForm" class="login-card">
-      <h1>CUI Connect</h1>
-      <p class="muted">COMSATS University Islamabad &middot; Campus Communication</p>
-      <label>Username / Reg. No<input id="username" autocomplete="username" required /></label>
-      <label>Password<input id="password" type="password" autocomplete="current-password" required /></label>
-      <button type="submit">Sign in</button>
-      <p id="loginError" class="error"></p>
-      <details class="demo">
-        <summary>Demo accounts (password: cui123)</summary>
-        <code>superadmin &middot; admin &middot; hod.cs &middot; ali.khan (teacher) &middot; sara.noor<br />fa23-bcs-001 (class rep of CSC102) &middot; fa23-bcs-002 &middot; fa23-bee-010 &middot; examcell</code>
-      </details>
-    </form>
-  </section>
-
-  <!-- ============ CHAT ============ -->
-  <section id="chatView" class="app hidden">
-    <aside class="sidebar">
-      <header class="me">
-        <div>
-          <strong id="meName"></strong>
-          <div id="meInfo" class="muted small"></div>
-        </div>
-        <div class="me-actions">
-          <button id="manageBtn" class="ghost hidden" title="Manage">Manage</button>
-          <button id="logoutBtn" class="ghost">Logout</button>
-        </div>
-      </header>
-      <div class="list" id="sidebarList"></div>
-    </aside>
-
-    <main class="chat">
-      <header class="chat-head">
-        <div>
-          <strong id="roomTitle">Select a chat</strong>
-          <div id="roomSub" class="muted small"></div>
-        </div>
-        <div class="head-actions">
-          <button id="modeBtn" class="ghost hidden"></button>
-          <button id="lockBtn" class="ghost hidden"></button>
-        </div>
-      </header>
-      <div id="pinned" class="pinned hidden"></div>
-      <div id="messages" class="messages"></div>
-      <div id="typing" class="typing small muted"></div>
-      <form id="composer" class="composer">
-        <input id="text" placeholder="Select a chat to start" autocomplete="off" disabled />
-        <button type="submit" disabled>Send</button>
-      </form>
-      <div id="toast" class="toast hidden"></div>
-    </main>
-  </section>
-
-  <!-- ============ MANAGE DIALOG ============ -->
-  <dialog id="manageDlg">
-    <h2>Manage</h2>
-    <div class="forms">
-      <form id="userForm" class="box admin-only">
-        <h3>Add user</h3>
-        <input name="name" placeholder="Full name" required />
-        <input name="username" placeholder="Username / Reg. No" required />
-        <input name="password" placeholder="Password" required />
-        <select name="role" id="newRole">
-          <option value="student">Student</option>
-          <option value="faculty">Teacher</option>
-          <option value="hod">HOD</option>
-          <option value="staff">Staff (office)</option>
-          <option value="admin" class="super-only">Admin (super admin only)</option>
-        </select>
-        <input name="department" placeholder="Department (CS, EE, BBA...)" required />
-        <input name="semester" placeholder="Semester (students)" />
-        <input name="courses" placeholder="Courses e.g. CSC102,CSC241" />
-        <button>Add user</button>
-      </form>
-
-      <form id="groupForm" class="box">
-        <h3>Create group</h3>
-        <input name="name" placeholder="Group name" required />
-        <input name="description" placeholder="Description" />
-        <select name="audienceType" id="audType">
-          <option value="course">Course (class group)</option>
-          <option value="department">Department</option>
-          <option value="everyone">Everyone</option>
-          <option value="roles">Roles</option>
-          <option value="users">Specific usernames</option>
-        </select>
-        <input name="audienceValue" placeholder="CSC102 / CS / roles: student,faculty / usernames" />
-        <select name="postersType">
-          <option value="all">Everyone in group can post</option>
-          <option value="faculty">Only faculty / HOD / admin can post</option>
-          <option value="leaders">Only HOD / admin can post</option>
-        </select>
-        <button>Create group</button>
-      </form>
-
-      <form id="enrolForm" class="box admin-only">
-        <h3>Set courses of a user</h3>
-        <input name="username" placeholder="Username" required />
-        <input name="courses" placeholder="CSC102,CSC241" />
-        <button>Save courses</button>
-      </form>
-
-      <form id="inviteForm" class="box">
-        <h3>Invite / remove member</h3>
-        <select name="groupId" id="inviteGroup"></select>
-        <input name="usernames" placeholder="usernames, comma separated" required />
-        <select name="action"><option value="add">Add</option><option value="remove">Remove</option></select>
-        <button>Apply</button>
-      </form>
-
-      <form id="repForm" class="box rep-only">
-        <h3>Class Representative (head student)</h3>
-        <p class="muted small">The CR can post when the class group is in announcement mode and can pin messages.</p>
-        <input name="username" placeholder="Student username (fa23-bcs-002)" required />
-        <input name="course" placeholder="Course, e.g. CSC102" required />
-        <select name="rep"><option value="true">Appoint as CR</option><option value="false">Remove as CR</option></select>
-        <button>Apply</button>
-      </form>
+    <div class="login-brand">
+      <div class="brand-mark"><span>CUI</span></div>
+      <h1>Your whole campus, in one place.</h1>
+      <p>Notices from the admin office, your class channels, your teachers and your requests &mdash; COMSATS University Islamabad.</p>
+      <ul class="login-points">
+        <li><span class="dot-cat c-opportunity"></span>Scholarships, jobs and internships the day they open</li>
+        <li><span class="dot-cat c-academic"></span>A channel for every course you are enrolled in</li>
+        <li><span class="dot-cat c-exam"></span>Course problems sent straight to the admin office</li>
+      </ul>
     </div>
-
-    <!-- SUPER ADMIN / ADMIN control panel -->
-    <section id="superPanel" class="panel admin-only">
-      <h3>System control <button id="refreshPanel" class="mini" type="button">Refresh</button></h3>
-      <div id="stats" class="stats super-only"></div>
-      <h4>All accounts</h4>
-      <div class="table-wrap"><table id="userTable"></table></div>
-      <div class="super-only">
-        <h4>Audit log (latest 100 actions)</h4>
-        <div class="table-wrap short"><table id="auditTable"></table></div>
+    <div class="login-panel">
+      <form id="loginForm" class="login-card">
+        <h2>Sign in</h2>
+        <p class="muted">Use your registration number or staff username.</p>
+        <label class="field">Username / Reg. No
+          <input id="username" autocomplete="username" placeholder="fa23-bcs-001" required />
+        </label>
+        <label class="field">Password
+          <input id="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="btn primary block" type="submit">Sign in</button>
+        <p id="loginError" class="form-error" role="alert"></p>
+      </form>
+      <div class="demo">
+        <p class="demo-title">Demo accounts <span class="muted">password cui123 &middot; click to fill</span></p>
+        <div id="demoList" class="demo-list"></div>
       </div>
-    </section>
-    <p id="manageMsg" class="small"></p>
-    <button id="closeManage" class="ghost">Close</button>
+    </div>
+  </section>
+
+  <!-- ======================= APP ======================= -->
+  <section id="appView" class="app hidden">
+    <header class="topbar">
+      <button id="menuBtn" class="icon-btn on-ink only-mobile" aria-label="Open navigation"></button>
+      <div class="search">
+        <span class="search-icon" data-icon="search"></span>
+        <input id="searchInput" type="search" placeholder="Search channels, people and notices" autocomplete="off" aria-label="Search" />
+        <div id="searchResults" class="search-results hidden" role="listbox"></div>
+      </div>
+      <div class="topbar-me">
+        <span id="topAvatar" class="avatar sm"></span>
+      </div>
+    </header>
+
+    <nav class="rail" aria-label="Workspace">
+      <div class="ws-tile" title="COMSATS University Islamabad">CUI</div>
+      <button class="rail-btn" data-view="board"><span data-icon="megaphone"></span><small>Notices</small><b class="rail-badge hidden" id="railBoardBadge"></b></button>
+      <button class="rail-btn" data-view="chat"><span data-icon="message"></span><small>Chat</small><b class="rail-badge hidden" id="railChatBadge"></b></button>
+      <button class="rail-btn" data-view="requests"><span data-icon="inbox"></span><small>Requests</small><b class="rail-badge hidden" id="railReqBadge"></b></button>
+      <button class="rail-btn hidden" data-view="console" id="railConsole"><span data-icon="shield"></span><small>Manage</small></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" id="logoutBtn" title="Sign out"><span data-icon="logout"></span><small>Sign out</small></button>
+    </nav>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="ws-head">
+        <div>
+          <strong>COMSATS Islamabad</strong>
+          <span class="ws-sub" id="meRole"></span>
+        </div>
+      </div>
+      <div class="side-scroll">
+        <div class="side-nav">
+          <button class="side-item" data-view="board"><span data-icon="megaphone"></span><span class="label">Announcements</span><b class="count hidden" id="sideBoardCount"></b></button>
+          <button class="side-item" data-view="requests"><span data-icon="inbox"></span><span class="label">Requests</span><b class="count muted-count hidden" id="sideReqCount"></b></button>
+          <button class="side-item hidden" data-view="console" id="sideConsole"><span data-icon="shield"></span><span class="label">Manage</span></button>
+        </div>
+        <div class="side-section">
+          <button class="side-head" data-toggle="channels"><span data-icon="chevron"></span>Channels</button>
+          <div id="channelList" class="side-list"></div>
+        </div>
+        <div class="side-section">
+          <button class="side-head" data-toggle="dms"><span data-icon="chevron"></span>Direct messages</button>
+          <div id="dmList" class="side-list"></div>
+        </div>
+      </div>
+      <div class="me-card">
+        <span id="meAvatar" class="avatar"></span>
+        <div class="me-text">
+          <strong id="meName"></strong>
+          <span id="meInfo"></span>
+        </div>
+      </div>
+    </aside>
+    <div class="scrim hidden" id="scrim"></div>
+
+    <main class="main" id="main">
+      <!-- CHAT -->
+      <section id="view-chat" class="view hidden">
+        <header class="view-head chat-head">
+          <div class="chat-title">
+            <h2 id="roomTitle"></h2>
+            <p id="roomSub" class="muted"></p>
+          </div>
+          <div class="head-actions">
+            <button id="membersBtn" class="chip-btn hidden"><span data-icon="users"></span><span id="membersCount"></span></button>
+            <button id="modeBtn" class="btn ghost sm hidden"></button>
+            <button id="lockBtn" class="btn ghost sm hidden"></button>
+            <button id="infoBtn" class="icon-btn" aria-label="Channel details"><span data-icon="info"></span></button>
+          </div>
+        </header>
+        <div id="pinned" class="pinned-bar hidden"></div>
+        <div id="messages" class="messages" aria-live="polite"></div>
+        <div class="composer-wrap">
+          <div id="composerNotice" class="composer-notice hidden"></div>
+          <form id="composer" class="composer">
+            <textarea id="text" rows="1" placeholder="Message" disabled></textarea>
+            <div class="composer-bar">
+              <span id="typing" class="typing"></span>
+              <span class="hint">Enter to send &middot; Shift + Enter for a new line</span>
+              <button class="send-btn" type="submit" disabled aria-label="Send"><span data-icon="send"></span></button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ANNOUNCEMENTS -->
+      <section id="view-board" class="view board hidden">
+        <div class="board-scroll">
+          <header class="board-head">
+            <div>
+              <h1>Notice board</h1>
+              <p class="muted" id="boardIntro"></p>
+            </div>
+            <button id="newAnnBtn" class="btn primary hidden"><span data-icon="plus"></span>New announcement</button>
+          </header>
+          <div class="board-filters">
+            <div class="seg" id="boardTabs" role="tablist"></div>
+            <div class="cat-chips" id="catChips"></div>
+          </div>
+          <div class="board-grid">
+            <div class="board-feed">
+              <div id="featured"></div>
+              <div id="feed"></div>
+            </div>
+            <aside class="deadlines">
+              <h3>Closing soon</h3>
+              <div id="deadlineList"></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- REQUESTS -->
+      <section id="view-requests" class="view requests hidden">
+        <div class="req-list-pane">
+          <header class="view-head stack">
+            <div class="head-row">
+              <h2>Requests</h2>
+              <button id="newReqBtn" class="btn primary sm"><span data-icon="plus"></span>New request</button>
+            </div>
+            <p class="muted" id="reqIntro"></p>
+            <div class="seg small" id="reqTabs"></div>
+          </header>
+          <div id="reqList" class="req-list"></div>
+        </div>
+        <div class="req-detail-pane" id="reqDetail"></div>
+      </section>
+
+      <!-- MANAGE -->
+      <section id="view-console" class="view console hidden">
+        <header class="view-head stack">
+          <h2>Manage</h2>
+          <div class="seg small" id="consoleTabs"></div>
+        </header>
+        <div class="console-body" id="consoleBody"></div>
+      </section>
+    </main>
+
+    <aside id="detail" class="detail hidden" aria-label="Details"></aside>
+  </section>
+
+  <!-- New / edit announcement -->
+  <dialog id="annDlg" class="sheet wide">
+    <form id="annForm" method="dialog" class="ann-form">
+      <div class="sheet-head">
+        <h2 id="annDlgTitle">New announcement</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button>
+      </div>
+      <div class="ann-compose">
+        <div class="ann-fields">
+          <label class="field">Title
+            <input name="title" maxlength="140" required placeholder="e.g. Need-based scholarship applications are open" />
+          </label>
+          <fieldset class="field">
+            <legend>Type</legend>
+            <div class="chip-radio" id="annCats"></div>
+          </fieldset>
+          <fieldset class="field">
+            <legend>Priority</legend>
+            <div class="seg small" id="annPriority"></div>
+          </fieldset>
+          <label class="field">Details
+            <textarea name="body" rows="6" maxlength="4000" required placeholder="What is it, who is it for, and what should people do?"></textarea>
+          </label>
+          <div class="field-row">
+            <label class="field">Who should see it
+              <select name="audienceType" id="annAudType"></select>
+            </label>
+            <label class="field" id="annAudValueWrap">Department
+              <select name="audienceValue" id="annAudValue"></select>
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">Last date <span class="opt">optional</span>
+              <input name="deadline" type="date" />
+            </label>
+            <label class="field">Button text <span class="opt">optional</span>
+              <input name="linkLabel" maxlength="40" placeholder="Apply now" />
+            </label>
+          </div>
+          <label class="field">Link <span class="opt">optional</span>
+            <input name="link" type="url" placeholder="https://" />
+          </label>
+          <label class="check"><input type="checkbox" name="pinned" /> Pin to the top of the board</label>
+          <p class="form-error" id="annError" role="alert"></p>
+        </div>
+        <div class="ann-preview">
+          <p class="preview-label">Preview</p>
+          <div id="annPreview"></div>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary" id="annSubmit">Publish</button>
+      </div>
+    </form>
   </dialog>
+
+  <!-- New request -->
+  <dialog id="reqDlg" class="sheet">
+    <form id="reqForm" method="dialog">
+      <div class="sheet-head">
+        <h2>Report a course problem</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button>
+      </div>
+      <div class="sheet-body">
+        <fieldset class="field">
+          <legend>What is it about?</legend>
+          <div class="chip-radio" id="reqTypes"></div>
+        </fieldset>
+        <label class="field">Course
+          <select name="course" id="reqCourse"></select>
+        </label>
+        <label class="field">Subject
+          <input name="subject" maxlength="120" required placeholder="One line the office will see first" />
+        </label>
+        <label class="field">Details
+          <textarea name="details" rows="5" maxlength="2000" required placeholder="Section, timings, what you already tried..."></textarea>
+        </label>
+        <p class="form-error" id="reqError" role="alert"></p>
+      </div>
+      <div class="sheet-foot">
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Send to admin office</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>

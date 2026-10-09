@@ -100,6 +100,8 @@ function syncAllSockets() {
       else socket.leave('g:' + g.id);
     }
     socket.emit('snapshot', snapshot(user));
+    socket.emit('board', boardFor(user));
+    socket.emit('requests', requestsFor(user));
   }
 }
 
@@ -237,6 +239,8 @@ app.get('/api/admin/stats', restAuth, superOnly, (req, res) => {
     groups: store.db.groups.length,
     lockedGroups: store.db.groups.filter((g) => g.locked).length,
     messages,
+    announcements: store.db.announcements.length,
+    openRequests: store.db.requests.filter((r) => ['open', 'in_review'].includes(r.status)).length,
     onlineNow: [...onlineCount.keys()].filter(isOnline).length,
   });
 });
@@ -330,6 +334,224 @@ app.delete('/api/admin/groups/:id', restAuth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+// =========================================================================
+//  ANNOUNCEMENTS (notice board)
+//  Admin / offices / HOD publish; each user only receives what matches his
+//  audience. Every change is pushed live to every connected socket.
+// =========================================================================
+const userCountFor = (spec) => store.db.users.filter((u) => !u.disabled && policy.matches(u, spec)).length;
+
+function audienceLabel(spec) {
+  if (spec.everyone) return 'Everyone';
+  if (spec.departments) return spec.departments.join(', ') + ' department';
+  if (spec.roles) return spec.roles.map((r) => ({ faculty: 'Teachers', student: 'Students', hod: 'HODs', staff: 'Staff' }[r] || r)).join(', ');
+  return 'Selected people';
+}
+
+function announcementView(a, user) {
+  const canEdit = policy.canEditAnnouncement(user, a);
+  return {
+    id: a.id, title: a.title, body: a.body, category: a.category, priority: a.priority,
+    link: a.link, linkLabel: a.linkLabel, deadline: a.deadline, pinned: a.pinned,
+    author: a.author, at: a.at, updatedAt: a.updatedAt,
+    audienceLabel: audienceLabel(a.audience),
+    audience: canEdit ? a.audience : undefined,
+    read: a.readBy.includes(user.id),
+    saved: a.savedBy.includes(user.id),
+    mine: a.createdBy === user.id,
+    canEdit,
+    // reach numbers are only for the people who publish
+    seenBy: canEdit ? a.readBy.length : undefined,
+    reach: canEdit ? userCountFor(a.audience) : undefined,
+  };
+}
+
+const boardFor = (user) => store.db.announcements
+  .filter((a) => policy.canSeeAnnouncement(user, a))
+  .map((a) => announcementView(a, user));
+
+// send every connected user his own (filtered) board
+function pushBoard(fresh) {
+  for (const socket of io.sockets.sockets.values()) {
+    const user = store.getUser(socket.data.userId);
+    if (!user) continue;
+    socket.emit('board', boardFor(user));
+    // small "new announcement" notification for readers (not for the author)
+    if (fresh && fresh.createdBy !== user.id && policy.canSeeAnnouncement(user, fresh)) {
+      socket.emit('announcement:new', { id: fresh.id, title: fresh.title, category: fresh.category, priority: fresh.priority });
+    }
+  }
+}
+
+function buildAudience(body) {
+  const { audienceType = 'everyone', audienceValue = '' } = body || {};
+  const value = String(audienceValue).trim();
+  if (audienceType === 'everyone') return { everyone: true };
+  if (audienceType === 'department' && value) return { departments: [value] };
+  if (audienceType === 'roles') {
+    const roles = value.split(',').map((r) => r.trim()).filter((r) => ['student', 'faculty', 'hod', 'staff'].includes(r));
+    return roles.length ? { roles } : null;
+  }
+  return null;
+}
+
+function cleanAnnouncement(body) {
+  const b = body || {};
+  const title = String(b.title || '').trim();
+  const text = String(b.body || '').trim();
+  if (!title || title.length > 140) return { error: 'Title is required (max 140 characters)' };
+  if (!text || text.length > 4000) return { error: 'Details are required (max 4000 characters)' };
+  const category = store.ANN_CATEGORIES.includes(b.category) ? b.category : 'general';
+  const priority = store.ANN_PRIORITIES.includes(b.priority) ? b.priority : 'normal';
+  const link = String(b.link || '').trim();
+  if (link && !/^https?:\/\//i.test(link)) return { error: 'Link must start with http:// or https://' };
+  const deadline = /^\d{4}-\d{2}-\d{2}$/.test(String(b.deadline || '')) ? b.deadline : null;
+  return { title, body: text, category, priority, link, linkLabel: String(b.linkLabel || '').trim().slice(0, 40), deadline, pinned: Boolean(b.pinned) };
+}
+
+app.get('/api/announcements', restAuth, (req, res) => res.json(boardFor(req.user)));
+
+app.post('/api/announcements', restAuth, (req, res) => {
+  const fields = cleanAnnouncement(req.body);
+  if (fields.error) return res.status(400).json({ error: fields.error });
+  const audience = buildAudience(req.body);
+  if (!audience) return res.status(400).json({ error: 'Choose who should see this announcement' });
+  if (!policy.canPublishAnnouncement(req.user, audience)) {
+    return res.status(403).json({ error: req.user.role === 'hod' ? 'HODs can only publish to their own department' : 'You are not allowed to publish to this audience' });
+  }
+  const a = store.addAnnouncement({ ...fields, audience, author: req.user });
+  store.audit(req.user, 'announcement.publish', a.title);
+  pushBoard(a);
+  res.json(announcementView(a, req.user));
+});
+
+app.patch('/api/announcements/:id', restAuth, (req, res) => {
+  const a = store.getAnnouncement(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Announcement not found' });
+  if (!policy.canEditAnnouncement(req.user, a)) return res.status(403).json({ error: 'Only the publisher or an admin can edit this' });
+  // quick toggle: { pinned: true/false } only
+  if (Object.keys(req.body || {}).length === 1 && 'pinned' in req.body) {
+    a.pinned = Boolean(req.body.pinned);
+  } else {
+    const fields = cleanAnnouncement(req.body);
+    if (fields.error) return res.status(400).json({ error: fields.error });
+    const audience = buildAudience(req.body);
+    if (!audience || !policy.canPublishAnnouncement(req.user, audience)) return res.status(403).json({ error: 'You are not allowed to publish to this audience' });
+    Object.assign(a, fields, { audience });
+  }
+  a.updatedAt = Date.now();
+  store.audit(req.user, 'announcement.edit', a.title);
+  store.save();
+  pushBoard();
+  res.json(announcementView(a, req.user));
+});
+
+app.delete('/api/announcements/:id', restAuth, (req, res) => {
+  const a = store.getAnnouncement(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Announcement not found' });
+  if (!policy.canEditAnnouncement(req.user, a)) return res.status(403).json({ error: 'Only the publisher or an admin can delete this' });
+  store.db.announcements = store.db.announcements.filter((x) => x.id !== a.id);
+  store.audit(req.user, 'announcement.delete', a.title);
+  store.save();
+  pushBoard();
+  res.json({ ok: true });
+});
+
+// mark as read / save for later (per user, only for announcements he can see)
+function personalFlag(listName) {
+  return (req, res) => {
+    const a = store.getAnnouncement(req.params.id);
+    if (!a || !policy.canSeeAnnouncement(req.user, a)) return res.status(404).json({ error: 'Announcement not found' });
+    const set = new Set(a[listName]);
+    const on = listName === 'readBy' ? true : !set.has(req.user.id); // read is one-way, save toggles
+    if (on) set.add(req.user.id); else set.delete(req.user.id);
+    a[listName] = [...set];
+    store.save();
+    res.json(announcementView(a, req.user));
+  };
+}
+app.post('/api/announcements/:id/read', restAuth, personalFlag('readBy'));
+app.post('/api/announcements/:id/save', restAuth, personalFlag('savedBy'));
+
+// =========================================================================
+//  COURSE REQUESTS (tickets to the admin office)
+//  Students / teachers report course problems (clash, add-drop, section,
+//  missing from class channel...). Admin handles all, HOD handles own dept.
+// =========================================================================
+function requestView(r, user) {
+  return { ...r, canHandle: policy.canHandleRequest(user, r) };
+}
+const requestsFor = (user) => store.db.requests
+  .filter((r) => policy.canSeeRequest(user, r))
+  .map((r) => requestView(r, user));
+
+function pushRequests(changed) {
+  for (const socket of io.sockets.sockets.values()) {
+    const user = store.getUser(socket.data.userId);
+    if (!user || (changed && !policy.canSeeRequest(user, changed))) continue;
+    socket.emit('requests', requestsFor(user));
+  }
+}
+
+app.get('/api/requests', restAuth, (req, res) => res.json(requestsFor(req.user)));
+
+app.post('/api/requests', restAuth, (req, res) => {
+  if (!policy.canOpenRequest(req.user)) return res.status(403).json({ error: 'Admins handle requests; they do not open them' });
+  const b = req.body || {};
+  const type = store.REQ_TYPES.includes(b.type) ? b.type : null;
+  const subject = String(b.subject || '').trim();
+  const details = String(b.details || '').trim();
+  const course = String(b.course || '').trim().toUpperCase().slice(0, 12);
+  if (!type) return res.status(400).json({ error: 'Choose what the problem is about' });
+  if (!subject || subject.length > 120) return res.status(400).json({ error: 'Write a short subject (max 120 characters)' });
+  if (!details || details.length > 2000) return res.status(400).json({ error: 'Describe the problem (max 2000 characters)' });
+  // simple flood guard: at most 5 open requests per person
+  const open = store.db.requests.filter((r) => r.createdBy === req.user.id && ['open', 'in_review'].includes(r.status)).length;
+  if (open >= 5) return res.status(429).json({ error: 'You already have 5 open requests. Wait for the office to answer them.' });
+  const r = store.addRequest({ type, course, subject, details, user: req.user });
+  store.audit(req.user, 'request.open', `${r.ref} ${r.subject}`);
+  pushRequests(r);
+  res.json(requestView(r, req.user));
+});
+
+app.post('/api/requests/:id/reply', restAuth, (req, res) => {
+  const r = store.getRequest(req.params.id);
+  if (!r || !policy.canSeeRequest(req.user, r)) return res.status(404).json({ error: 'Request not found' });
+  const text = String((req.body || {}).text || '').trim();
+  if (!text || text.length > 1000) return res.status(400).json({ error: 'Reply is empty or too long' });
+  if (['resolved', 'rejected'].includes(r.status) && !policy.canHandleRequest(req.user, r)) {
+    return res.status(409).json({ error: 'This request is closed. Open a new one if the problem is back.' });
+  }
+  r.thread.push({ kind: 'reply', from: { name: req.user.name, role: req.user.role }, text, at: Date.now() });
+  r.updatedAt = Date.now();
+  store.save();
+  pushRequests(r);
+  res.json(requestView(r, req.user));
+});
+
+app.patch('/api/requests/:id/status', restAuth, (req, res) => {
+  const r = store.getRequest(req.params.id);
+  if (!r || !policy.canSeeRequest(req.user, r)) return res.status(404).json({ error: 'Request not found' });
+  if (!policy.canHandleRequest(req.user, r)) return res.status(403).json({ error: 'Only the admin office or your HOD can change the status' });
+  const { status, note = '' } = req.body || {};
+  if (!store.REQ_STATUS.includes(status)) return res.status(400).json({ error: 'Unknown status' });
+  r.status = status;
+  r.thread.push({ kind: 'status', status, from: { name: req.user.name, role: req.user.role }, text: String(note).trim().slice(0, 1000), at: Date.now() });
+  r.updatedAt = Date.now();
+  store.audit(req.user, 'request.status', `${r.ref}: ${status}`);
+  store.save();
+  pushRequests(r);
+  res.json(requestView(r, req.user));
+});
+
+// lists the UI needs for its forms
+app.get('/api/meta', restAuth, (req, res) => {
+  res.json({
+    departments: [...new Set(store.db.users.map((u) => u.department))].sort(),
+    courses: [...new Set(store.db.users.flatMap((u) => u.courses || []))].sort(),
+  });
+});
+
 // ------------------------- Socket.IO -------------------------
 // Handshake check: no valid token, no connection at all.
 io.use((socket, next) => {
@@ -380,6 +602,8 @@ io.on('connection', (socket) => {
 
   onlineCount.set(user.id, (onlineCount.get(user.id) || 0) + 1);
   socket.emit('snapshot', snapshot(user));
+  socket.emit('board', boardFor(user));
+  socket.emit('requests', requestsFor(user));
   broadcastPresence();
 
   // ---- load old messages of a room (permission checked again!) ----

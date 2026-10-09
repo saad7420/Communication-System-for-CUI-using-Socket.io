@@ -1,7 +1,7 @@
 {
   "name": "cui-connect-rbac",
-  "version": "1.0.0",
-  "description": "COMSATS University Islamabad communication system - Project A (role/rule based boundaries)",
+  "version": "3.0.0",
+  "description": "CUI Connect - Slack-style campus workspace for COMSATS University Islamabad (notice board, channels, DMs, course requests)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
